@@ -13,11 +13,21 @@
 # limitations under the License.
 
 """Launch realsense2_camera node."""
+import os
 from launch import LaunchDescription
 import launch_ros.actions
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.conditions import IfCondition
+
+def parse_bool2string(string):
+    try:
+        if int(string):
+            return 'true'
+        else:
+            return 'false'
+    except:
+        return string
 
 
 configurable_parameters = [{'name': 'camera_name',                  'default': 'camera', 'description': 'camera unique name'},
@@ -25,20 +35,20 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'usb_port_id',                  'default': '', 'description': 'choose device by usb port id'},
                            {'name': 'device_type',                  'default': '', 'description': 'choose device by type'},
                            {'name': 'config_file',                  'default': '', 'description': 'yaml config file'},
-                           {'name': 'enable_pointcloud',            'default': 'false', 'description': 'enable pointcloud'},
+                           {'name': 'enable_pointcloud',            'default': 'true', 'description': 'enable pointcloud'},
                            {'name': 'unite_imu_method',             'default': '', 'description': '[copy|linear_interpolation]'},                           
                            {'name': 'json_file_path',               'default': '', 'description': 'allows advanced configuration'},                           
                            {'name': 'output',                       'default': 'screen', 'description': 'pipe node output [screen|log]'},                           
-                           {'name': 'depth_width',                  'default': '640', 'description': 'depth image width'},                           
-                           {'name': 'depth_height',                 'default': '480', 'description': 'depth image height'},                           
-                           {'name': 'enable_depth',                 'default': 'true', 'description': 'enable depth stream'},
-                           {'name': 'color_width',                  'default': '640', 'description': 'color image width'},                           
-                           {'name': 'color_height',                 'default': '480', 'description': 'color image height'},                           
-                           {'name': 'enable_color',                 'default': 'true', 'description': 'enable color stream'},
-                           {'name': 'infra_width',                  'default': '640', 'description': 'infra width'},
-                           {'name': 'infra_height',                 'default': '480', 'description': 'infra width'},
-                           {'name': 'enable_infra1',                'default': 'true', 'description': 'enable infra1 stream'},
-                           {'name': 'enable_infra2',                'default': 'true', 'description': 'enable infra2 stream'},
+                           {'name': 'depth_width',                  'default': os.getenv('STEREO_DEPTH_WIDTH','640'), 'description': 'depth image width'},                           
+                           {'name': 'depth_height',                 'default': os.getenv('STEREO_DEPTH_HEIGHT','480'), 'description': 'depth image height'},                           
+                           {'name': 'enable_depth',                 'default': parse_bool2string(os.getenv('STEREO_DEPTH_ENABLE','true')), 'description': 'enable depth stream'},
+                           {'name': 'color_width',                  'default': os.getenv('STEREO_COLOR_WIDTH','640'), 'description': 'color image width'},                           
+                           {'name': 'color_height',                 'default': os.getenv('STEREO_COLOR_HEIGHT','480'), 'description': 'color image height'},                           
+                           {'name': 'enable_color',                 'default': parse_bool2string(os.getenv('STEREO_COLOR_ENABLE','true')), 'description': 'enable color stream'},
+                           {'name': 'infra_width',                  'default': os.getenv('STEREO_INFRA_WIDTH','640'), 'description': 'infra width'},
+                           {'name': 'infra_height',                 'default': os.getenv('STEREO_INFRA_HEIGHT','480'), 'description': 'infra width'},
+                           {'name': 'enable_infra1',                'default': parse_bool2string(os.getenv('STEREO_INFRA1_ENABLE','true')), 'description': 'enable infra1 stream'},
+                           {'name': 'enable_infra2',                'default': parse_bool2string(os.getenv('STEREO_INFRA2_ENABLE','true')), 'description': 'enable infra2 stream'},
                            {'name': 'infra_rgb',                    'default': 'false', 'description': 'enable infra2 stream'},
                            {'name': 'fisheye_width',                'default': '848', 'description': 'fisheye width'},
                            {'name': 'fisheye_height',               'default': '800', 'description': 'fisheye width'},
@@ -48,10 +58,10 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'confidence_height',            'default': '480', 'description': 'depth image height'},                           
                            {'name': 'enable_confidence',            'default': 'true', 'description': 'enable depth stream'},
                            {'name': 'fisheye_fps',                  'default': '30.', 'description': ''},                           
-                           {'name': 'depth_fps',                    'default': '30.', 'description': ''},                           
+                           {'name': 'depth_fps',                    'default': str(float(os.getenv('STEREO_DEPTH_FPS','30.'))), 'description': ''},                           
                            {'name': 'confidence_fps',               'default': '30.', 'description': ''},                           
-                           {'name': 'infra_fps',                    'default': '30.', 'description': ''},                           
-                           {'name': 'color_fps',                    'default': '30.', 'description': ''},                           
+                           {'name': 'infra_fps',                    'default': str(float(os.getenv('STEREO_INFRA_FPS','30.'))), 'description': ''},                           
+                           {'name': 'color_fps',                    'default': str(float(os.getenv('STEREO_COLOR_FPS','30.'))), 'description': ''},                           
                            {'name': 'gyro_fps',                     'default': '400.', 'description': ''},                           
                            {'name': 'accel_fps',                    'default': '250.', 'description': ''},    
                            {'name': 'color_qos',                    'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
@@ -59,12 +69,12 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'depth_qos',                    'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
                            {'name': 'fisheye_qos',                  'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
                            {'name': 'infra_qos',                    'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
-                           {'name': 'enable_gyro',                  'default': 'false', 'description': ''},                           
-                           {'name': 'enable_accel',                 'default': 'false', 'description': ''},                           
+                           {'name': 'enable_gyro',                  'default': parse_bool2string(os.getenv('STEREO_ENABLE_GYRO','false')), 'description': ''},                           
+                           {'name': 'enable_accel',                 'default': parse_bool2string(os.getenv('STEREO_ENABLE_ACCEL','false')), 'description': ''},                           
                            {'name': 'pointcloud_texture_stream',    'default': 'RS2_STREAM_COLOR', 'description': 'testure stream for pointcloud'},                           
                            {'name': 'pointcloud_texture_index',     'default': '0', 'description': 'testure stream index for pointcloud'},                           
                            {'name': 'enable_sync',                  'default': 'false', 'description': ''},                           
-                           {'name': 'align_depth',                  'default': 'false', 'description': ''},                           
+                           {'name': 'align_depth',                  'default': 'true', 'description': ''},                           
                            {'name': 'filters',                      'default': '', 'description': ''},                           
                            {'name': 'clip_distance',                'default': '-2.', 'description': ''},                           
                            {'name': 'linear_accel_cov',             'default': '0.01', 'description': ''},                           
