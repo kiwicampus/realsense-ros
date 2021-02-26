@@ -94,6 +94,9 @@ def set_configurable_parameters(parameters):
     return dict([(param['name'], LaunchConfiguration(param['name'])) for param in parameters])
 
 def generate_launch_description():
+    # Default nodes to launch
+    respawn_nodes = bool(os.getenv(key="RESPAWN_NODES", default=1))
+    respawn_delay = float(os.getenv(key="RESPAWN_DELAY", default=5))
     return LaunchDescription(declare_configurable_parameters(configurable_parameters) + [
         # Realsense
         launch_ros.actions.Node(
@@ -106,6 +109,8 @@ def generate_launch_description():
                           ],
             output='screen',
             emulate_tty=True,
+            respawn=respawn_nodes,
+            respawn_delay=respawn_delay
             ),
         launch_ros.actions.Node(
             condition=IfCondition(PythonExpression(["'", LaunchConfiguration('config_file'), "' != ''"])),
@@ -118,5 +123,7 @@ def generate_launch_description():
                           ],
             output='screen',
             emulate_tty=True,
+            respawn=respawn_nodes,
+            respawn_delay=respawn_delay
             ),
     ])
