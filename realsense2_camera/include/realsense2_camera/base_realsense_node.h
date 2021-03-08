@@ -204,6 +204,7 @@ namespace realsense2_camera
         void publishIntrinsics();
         void runFirstFrameInitialization(rs2_stream stream_type);
         void publishPointCloud(rs2::points f, const rclcpp::Time& t, const rs2::frameset& frameset);
+        void publishDensePointCloud(const rs2::points& points, const rs2::video_frame& color_frame, const rclcpp::Time& time);
         Extrinsics rsExtrinsicsToMsg(const rs2_extrinsics& extrinsics, const std::string& frame_id) const;
 
         IMUInfo getImuInfo(const stream_index_pair& stream_index);

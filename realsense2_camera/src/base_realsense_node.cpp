@@ -1744,7 +1744,14 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                     if (0 != _pointcloud_publisher->get_subscription_count())
                     {
                         ROS_DEBUG("Publish pointscloud");
-                        publishPointCloud(f.as<rs2::points>(), t, frameset);
+                        rs2::align align_to_color_ = rs2::align(RS2_STREAM_COLOR);
+                        rs2::pointcloud pc_;
+                        auto aligned_frameset = align_to_color_.process(frameset);
+                        auto depth = aligned_frameset.get_depth_frame();
+                        rs2::points points_ = pc_.calculate(depth);
+                        auto color_frame = frameset.get_color_frame();
+                        publishDensePointCloud(points_, color_frame, t);
+                        // publishPointCloud(f.as<rs2::points>(), t, frameset);
                     }
                     continue;
                 }
@@ -2212,6 +2219,107 @@ void reverse_memcpy(unsigned char* dst, const unsigned char* src, size_t n)
     for (i=0; i < n; ++i)
         dst[n-1-i] = src[i];
 
+}
+
+void BaseRealSenseNode::publishDensePointCloud(const rs2::points& points, const rs2::video_frame& color_frame,
+                                               const rclcpp::Time& time)
+{
+    const rs2::vertex* vertex = points.get_vertices();
+
+    if (!_node.get_node_options().use_intra_process_comms())
+    {
+        sensor_msgs::msg::PointCloud2::SharedPtr pc_msg = std::make_shared<sensor_msgs::msg::PointCloud2>();
+        // debug
+        // RCLCPP_INFO(node_->get_logger(), "timestamp: %f, address: %p", t.seconds(),
+        // reinterpret_cast<std::uintptr_t>(pc_msg.get()));
+        //
+        pc_msg->header.stamp = time;
+        pc_msg->header.frame_id = DEFAULT_COLOR_OPTICAL_FRAME_ID;
+        pc_msg->width = color_frame.get_width();
+        pc_msg->height = color_frame.get_height();
+        pc_msg->point_step = 3 * sizeof(float) + 3 * sizeof(uint8_t);
+        pc_msg->row_step = pc_msg->point_step * pc_msg->width;
+        pc_msg->is_dense = true;
+
+        sensor_msgs::PointCloud2Modifier modifier(*pc_msg);
+        modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
+
+        sensor_msgs::PointCloud2Iterator<float> iter_x(*pc_msg, "x");
+        sensor_msgs::PointCloud2Iterator<float> iter_y(*pc_msg, "y");
+        sensor_msgs::PointCloud2Iterator<float> iter_z(*pc_msg, "z");
+        sensor_msgs::PointCloud2Iterator<uint8_t> iter_r(*pc_msg, "r");
+        sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(*pc_msg, "g");
+        sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(*pc_msg, "b");
+
+        int channel_num = color_frame.get_bytes_per_pixel();
+        uint8_t* color_data = (uint8_t*)color_frame.get_data();
+
+        for (size_t pnt_idx = 0; pnt_idx < pc_msg->width * pc_msg->height; pnt_idx++)
+        {
+            *iter_x = vertex[pnt_idx].x;
+            *iter_y = vertex[pnt_idx].y;
+            *iter_z = vertex[pnt_idx].z;
+
+            *iter_r = color_data[pnt_idx * channel_num];
+            *iter_g = color_data[pnt_idx * channel_num + 1];
+            *iter_b = color_data[pnt_idx * channel_num + 2];
+            ++iter_x;
+            ++iter_y;
+            ++iter_z;
+            ++iter_r;
+            ++iter_g;
+            ++iter_b;
+        }
+        // pointcloud_pub_->publish(*pc_msg);
+        _pointcloud_publisher->publish(*pc_msg);
+    }
+    else
+    {
+        sensor_msgs::msg::PointCloud2::UniquePtr pc_msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
+        // debug
+        // RCLCPP_INFO(node_->get_logger(), "timestamp: %f, address: %p", t.seconds(),
+        // reinterpret_cast<std::uintptr_t>(pc_msg.get()));
+        //
+        pc_msg->header.stamp = time;
+        pc_msg->header.frame_id = DEFAULT_COLOR_OPTICAL_FRAME_ID;
+        pc_msg->width = color_frame.get_width();
+        pc_msg->height = color_frame.get_height();
+        pc_msg->point_step = 3 * sizeof(float) + 3 * sizeof(uint8_t);
+        pc_msg->row_step = pc_msg->point_step * pc_msg->width;
+        pc_msg->is_dense = true;
+
+        sensor_msgs::PointCloud2Modifier modifier(*pc_msg);
+        modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
+
+        sensor_msgs::PointCloud2Iterator<float> iter_x(*pc_msg, "x");
+        sensor_msgs::PointCloud2Iterator<float> iter_y(*pc_msg, "y");
+        sensor_msgs::PointCloud2Iterator<float> iter_z(*pc_msg, "z");
+        sensor_msgs::PointCloud2Iterator<uint8_t> iter_r(*pc_msg, "r");
+        sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(*pc_msg, "g");
+        sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(*pc_msg, "b");
+
+        int channel_num = color_frame.get_bytes_per_pixel();
+        uint8_t* color_data = (uint8_t*)color_frame.get_data();
+
+        for (size_t pnt_idx = 0; pnt_idx < pc_msg->width * pc_msg->height; pnt_idx++)
+        {
+            *iter_x = vertex[pnt_idx].x;
+            *iter_y = vertex[pnt_idx].y;
+            *iter_z = vertex[pnt_idx].z;
+
+            *iter_r = color_data[pnt_idx * channel_num];
+            *iter_g = color_data[pnt_idx * channel_num + 1];
+            *iter_b = color_data[pnt_idx * channel_num + 2];
+            ++iter_x;
+            ++iter_y;
+            ++iter_z;
+            ++iter_r;
+            ++iter_g;
+            ++iter_b;
+        }
+        // pointcloud_pub_->publish(std::move(pc_msg));
+        _pointcloud_publisher->publish(std::move(pc_msg));
+    }
 }
 
 void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset)
