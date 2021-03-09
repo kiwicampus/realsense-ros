@@ -328,6 +328,7 @@ namespace realsense2_camera
         rs2::pointcloud pc_;
         rs2::align align_to_color_ = rs2::align(RS2_STREAM_COLOR);
         rs2::points points_;
+        bool _aligned_pc;
     };//end class
 }
 #endif //___BASE_REALSENSE_NODE_HEADER___

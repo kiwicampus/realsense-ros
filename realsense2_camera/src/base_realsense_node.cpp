@@ -789,6 +789,7 @@ void BaseRealSenseNode::getParameters()
     setNgetNodeParameter(_angular_velocity_cov, "angular_velocity_cov", 0.01);
     setNgetNodeParameter(_hold_back_imu_for_frames, "hold_back_imu_for_frames", HOLD_BACK_IMU_FOR_FRAMES);
     setNgetNodeParameter(_publish_odom_tf, "publish_odom_tf", PUBLISH_ODOM_TF);
+    setNgetNodeParameter(_aligned_pc, "aligned_pc", ALIGNED_POINTCLOUD);
 }
 
 void BaseRealSenseNode::setupDevice()
@@ -1744,12 +1745,17 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                     if (0 != _pointcloud_publisher->get_subscription_count())
                     {
                         ROS_DEBUG("Publish pointscloud");
-                        auto color_frame = frameset.get_color_frame();
-                        auto aligned_frameset = align_to_color_.process(frameset);
-                        auto depth = aligned_frameset.get_depth_frame();
-                        points_ = pc_.calculate(depth);
-                        publishDensePointCloud(points_, color_frame, t);
-                        // publishPointCloud(f.as<rs2::points>(), t, frameset);
+                        ROS_INFO_STREAM_ONCE("publishing " << (_aligned_pc ? "" : "un") << "aligned color pointcloud.");
+                        if (_aligned_pc)
+                        {
+                            auto color_frame = frameset.get_color_frame();
+                            auto aligned_frameset = align_to_color_.process(frameset);
+                            auto depth = aligned_frameset.get_depth_frame();
+                            points_ = pc_.calculate(depth);
+                            publishDensePointCloud(points_, color_frame, t);
+                        }
+                        else
+                            publishPointCloud(f.as<rs2::points>(), t, frameset);
                     }
                     continue;
                 }
