@@ -204,7 +204,6 @@ namespace realsense2_camera
         void publishIntrinsics();
         void runFirstFrameInitialization(rs2_stream stream_type);
         void publishPointCloud(rs2::points f, const rclcpp::Time& t, const rs2::frameset& frameset);
-        void publishDensePointCloud(const rs2::points& points, const rs2::video_frame& color_frame, const rclcpp::Time& time);
         Extrinsics rsExtrinsicsToMsg(const rs2_extrinsics& extrinsics, const std::string& frame_id) const;
 
         IMUInfo getImuInfo(const stream_index_pair& stream_index);
@@ -325,6 +324,10 @@ namespace realsense2_camera
         std::vector<rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr> _callback_handlers;
         std::set<std::string> _variable_names;
 
+        void publishDensePointCloud(const rs2::points& points, const rs2::video_frame& color_frame, const rclcpp::Time& time);
+        rs2::pointcloud pc_;
+        rs2::align align_to_color_ = rs2::align(RS2_STREAM_COLOR);
+        rs2::points points_;
     };//end class
 }
 #endif //___BASE_REALSENSE_NODE_HEADER___

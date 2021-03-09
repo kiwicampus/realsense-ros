@@ -1744,12 +1744,10 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                     if (0 != _pointcloud_publisher->get_subscription_count())
                     {
                         ROS_DEBUG("Publish pointscloud");
-                        rs2::align align_to_color_ = rs2::align(RS2_STREAM_COLOR);
-                        rs2::pointcloud pc_;
+                        auto color_frame = frameset.get_color_frame();
                         auto aligned_frameset = align_to_color_.process(frameset);
                         auto depth = aligned_frameset.get_depth_frame();
-                        rs2::points points_ = pc_.calculate(depth);
-                        auto color_frame = frameset.get_color_frame();
+                        points_ = pc_.calculate(depth);
                         publishDensePointCloud(points_, color_frame, t);
                         // publishPointCloud(f.as<rs2::points>(), t, frameset);
                     }
