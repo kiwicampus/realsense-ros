@@ -98,7 +98,13 @@ def generate_launch_description():
     # Default nodes to launch
     respawn_nodes = bool(os.getenv(key="RESPAWN_NODES", default=1))
     respawn_delay = float(os.getenv(key="RESPAWN_DELAY", default=5))
+    logger = LaunchConfiguration("log_level")
     return LaunchDescription(declare_configurable_parameters(configurable_parameters) + [
+        DeclareLaunchArgument(
+            "log_level",
+            default_value=["info"],
+            description="Logging level",
+        ),
         # Realsense
         launch_ros.actions.Node(
             condition=IfCondition(PythonExpression(["'", LaunchConfiguration('config_file'), "' == ''"])),
@@ -110,6 +116,7 @@ def generate_launch_description():
                           ],
             output='screen',
             emulate_tty=True,
+            arguments=['--ros-args', '--log-level', logger],
             respawn=respawn_nodes,
             respawn_delay=respawn_delay
             ),
@@ -124,6 +131,7 @@ def generate_launch_description():
                           ],
             output='screen',
             emulate_tty=True,
+            arguments=['--ros-args', '--log-level', logger],
             respawn=respawn_nodes,
             respawn_delay=respawn_delay
             ),

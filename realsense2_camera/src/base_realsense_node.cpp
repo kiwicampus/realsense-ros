@@ -2228,17 +2228,19 @@ void reverse_memcpy(unsigned char* dst, const unsigned char* src, size_t n)
 void BaseRealSenseNode::publishDensePointCloud(const rs2::points& points, const rs2::video_frame& color_frame,
                                                const rclcpp::Time& time)
 {
+    ROS_DEBUG("publishDensePointCloud method begin");
     const rs2::vertex* vertex = points.get_vertices();
 
     if (!_node.get_node_options().use_intra_process_comms())
-    {
+    {   
+        ROS_INFO_STREAM_ONCE("publishing pointcloud with intra process shared pointer");
         sensor_msgs::msg::PointCloud2::SharedPtr pc_msg = std::make_shared<sensor_msgs::msg::PointCloud2>();
         // debug
         // RCLCPP_INFO(node_->get_logger(), "timestamp: %f, address: %p", t.seconds(),
         // reinterpret_cast<std::uintptr_t>(pc_msg.get()));
         //
         pc_msg->header.stamp = time;
-        pc_msg->header.frame_id = DEFAULT_COLOR_OPTICAL_FRAME_ID;
+        pc_msg->header.frame_id = _optical_frame_id[DEPTH];
         pc_msg->width = color_frame.get_width();
         pc_msg->height = color_frame.get_height();
         pc_msg->point_step = 3 * sizeof(float) + 3 * sizeof(uint8_t);
@@ -2279,13 +2281,14 @@ void BaseRealSenseNode::publishDensePointCloud(const rs2::points& points, const 
     }
     else
     {
+        ROS_INFO_STREAM_ONCE("publishing pointcloud with normal unique pointer");
         sensor_msgs::msg::PointCloud2::UniquePtr pc_msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
         // debug
         // RCLCPP_INFO(node_->get_logger(), "timestamp: %f, address: %p", t.seconds(),
         // reinterpret_cast<std::uintptr_t>(pc_msg.get()));
         //
         pc_msg->header.stamp = time;
-        pc_msg->header.frame_id = DEFAULT_COLOR_OPTICAL_FRAME_ID;
+        pc_msg->header.frame_id = _optical_frame_id[DEPTH];
         pc_msg->width = color_frame.get_width();
         pc_msg->height = color_frame.get_height();
         pc_msg->point_step = 3 * sizeof(float) + 3 * sizeof(uint8_t);
@@ -2324,6 +2327,7 @@ void BaseRealSenseNode::publishDensePointCloud(const rs2::points& points, const 
         // pointcloud_pub_->publish(std::move(pc_msg));
         _pointcloud_publisher->publish(std::move(pc_msg));
     }
+    ROS_DEBUG("publishDensePointCloud method end");
 }
 
 void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset)
