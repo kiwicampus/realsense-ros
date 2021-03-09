@@ -80,7 +80,7 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'linear_accel_cov',             'default': '0.01', 'description': ''},                           
                            {'name': 'initial_reset',                'default': 'false', 'description': ''},                           
                            {'name': 'allow_no_texture_points',      'default': 'false', 'description': ''},                           
-                           {'name': 'ordered_pc',                   'default': 'true', 'description': ''},                           
+                           {'name': 'ordered_pc',                   'default': parse_bool2string(os.getenv('STEREO_ORDERED_POINTCLOUD','true')), 'description': ''},                           
                            {'name': 'aligned_pc',                   'default': parse_bool2string(os.getenv('STEREO_ALIGNED_POINTCLOUD','true')), 'description': ''},                           
                            {'name': 'calib_odom_file',              'default': '', 'description': ''},                           
                            {'name': 'topic_odom_in',                'default': '', 'description': 'topic for T265 wheel odometry'},
