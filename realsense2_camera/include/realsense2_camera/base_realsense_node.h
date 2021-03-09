@@ -324,6 +324,12 @@ namespace realsense2_camera
         std::vector<rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr> _callback_handlers;
         std::set<std::string> _variable_names;
 
+        void publishAlignedPointCloud(const rs2::points& points, const rs2::video_frame& color_frame, const rclcpp::Time& time);
+        void publishAlignedPointCloud(const rs2::points& points, const rs2::frameset& frameset, const rclcpp::Time& time);
+        rs2::pointcloud pc_;
+        rs2::align align_to_color_ = rs2::align(RS2_STREAM_COLOR);
+        rs2::points points_;
+        bool _aligned_pc;
     };//end class
 }
 #endif //___BASE_REALSENSE_NODE_HEADER___

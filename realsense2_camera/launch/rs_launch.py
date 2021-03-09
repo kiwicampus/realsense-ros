@@ -80,7 +80,8 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'linear_accel_cov',             'default': '0.01', 'description': ''},                           
                            {'name': 'initial_reset',                'default': 'false', 'description': ''},                           
                            {'name': 'allow_no_texture_points',      'default': 'false', 'description': ''},                           
-                           {'name': 'ordered_pc',                   'default': 'true', 'description': ''},                           
+                           {'name': 'ordered_pc',                   'default': parse_bool2string(os.getenv('STEREO_ORDERED_POINTCLOUD','true')), 'description': ''},                           
+                           {'name': 'aligned_pc',                   'default': parse_bool2string(os.getenv('STEREO_ALIGNED_POINTCLOUD','true')), 'description': ''},                           
                            {'name': 'calib_odom_file',              'default': '', 'description': ''},                           
                            {'name': 'topic_odom_in',                'default': '', 'description': 'topic for T265 wheel odometry'},
                            {'name': 'tf_publish_rate',              'default': '0.0', 'description': 'Rate of publishing static_tf'},
@@ -97,7 +98,13 @@ def generate_launch_description():
     # Default nodes to launch
     respawn_nodes = bool(os.getenv(key="RESPAWN_NODES", default=1))
     respawn_delay = float(os.getenv(key="RESPAWN_DELAY", default=5))
+    logger = LaunchConfiguration("log_level")
     return LaunchDescription(declare_configurable_parameters(configurable_parameters) + [
+        DeclareLaunchArgument(
+            "log_level",
+            default_value=["info"],
+            description="Logging level",
+        ),
         # Realsense
         launch_ros.actions.Node(
             condition=IfCondition(PythonExpression(["'", LaunchConfiguration('config_file'), "' == ''"])),
@@ -109,6 +116,7 @@ def generate_launch_description():
                           ],
             output='screen',
             emulate_tty=True,
+            arguments=['--ros-args', '--log-level', logger],
             respawn=respawn_nodes,
             respawn_delay=respawn_delay
             ),
@@ -123,6 +131,7 @@ def generate_launch_description():
                           ],
             output='screen',
             emulate_tty=True,
+            arguments=['--ros-args', '--log-level', logger],
             respawn=respawn_nodes,
             respawn_delay=respawn_delay
             ),
