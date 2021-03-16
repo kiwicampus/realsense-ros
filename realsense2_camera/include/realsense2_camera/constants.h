@@ -62,6 +62,7 @@ namespace realsense2_camera
     const bool SYNC_FRAMES             = false;
     const bool ORDERED_POINTCLOUD      = false;
     const bool ALIGNED_POINTCLOUD      = false;
+    const int COLOR_VIRTUAL_CAMERA     = -1; // -1 means no virtual camera writing
 
     const bool PUBLISH_TF        = true;
     const double TF_PUBLISH_RATE = 0; // Static transform

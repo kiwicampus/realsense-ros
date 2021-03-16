@@ -86,6 +86,7 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'topic_odom_in',                'default': '', 'description': 'topic for T265 wheel odometry'},
                            {'name': 'tf_publish_rate',              'default': '0.0', 'description': 'Rate of publishing static_tf'},
                            {'name': 'rosbag_filename',              'default': '', 'description': 'A realsense bagfile to run from as a device'},
+                           {'name': 'color_virtual_cam',            'default': os.getenv('STEREO_COLOR_VIRTUAL_CAMERA','-1'), 'description': 'virtual camera to write color stream'},                           
                           ]
 
 def declare_configurable_parameters(parameters):
