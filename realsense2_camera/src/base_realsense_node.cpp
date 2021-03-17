@@ -2602,6 +2602,13 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         // cv::waitKey(1);
          if (_color_virtual_cam >= 0 )
             virtualcam->schedule_frame(image);
+
+        double elapsed = t.seconds() - _color_last_timestamp;
+        // ROS_INFO_STREAM("Elapsed: "  << elapsed << " seconds");
+        if (elapsed < 1.0/16) // rate might be higher than 15/16 FPS, we just want publishing at 15 FPS Max
+            return;
+        _color_last_timestamp = t.seconds();
+
     }
 
     if (f.is<rs2::depth_frame>())

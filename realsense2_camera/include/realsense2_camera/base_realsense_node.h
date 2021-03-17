@@ -404,6 +404,7 @@ namespace realsense2_camera
         bool _aligned_pc;
         int _color_virtual_cam;
         FakeWebcam* virtualcam;
+        double _color_last_timestamp = 0.0;
     };//end class
 }
 #endif //___BASE_REALSENSE_NODE_HEADER___
