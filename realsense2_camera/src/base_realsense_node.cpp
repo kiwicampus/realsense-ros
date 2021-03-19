@@ -148,6 +148,10 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     try
     {
         publishTopics();
+        if (_color_virtual_cam >= 0 ){
+            virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
+            _width[COLOR], _height[COLOR]);
+        }
     }
     catch(const std::exception& e)
     {
@@ -790,6 +794,7 @@ void BaseRealSenseNode::getParameters()
     setNgetNodeParameter(_hold_back_imu_for_frames, "hold_back_imu_for_frames", HOLD_BACK_IMU_FOR_FRAMES);
     setNgetNodeParameter(_publish_odom_tf, "publish_odom_tf", PUBLISH_ODOM_TF);
     setNgetNodeParameter(_aligned_pc, "aligned_pc", ALIGNED_POINTCLOUD);
+    setNgetNodeParameter(_color_virtual_cam, "color_virtual_cam", COLOR_VIRTUAL_CAMERA);
 }
 
 void BaseRealSenseNode::setupDevice()
@@ -2590,6 +2595,21 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         image.create(height, width, image.type());
     }
     image.data = (uint8_t*)f.get_data();
+
+    if (stream.first == RS2_STREAM_COLOR && encoding.at(stream.first) == "rgb8")
+    {
+        // cv::imshow("color", image);
+        // cv::waitKey(1);
+         if (_color_virtual_cam >= 0 )
+            virtualcam->schedule_frame(image);
+
+        double elapsed = t.seconds() - _color_last_timestamp;
+        if (elapsed < 1.0/16) // rate might be higher than 15/16 FPS, we just want publishing at 15 FPS Max
+            return;
+        // ROS_INFO_STREAM("Elapsed: "  << elapsed << " seconds");
+        _color_last_timestamp = t.seconds();
+
+    }
 
     if (f.is<rs2::depth_frame>())
     {
