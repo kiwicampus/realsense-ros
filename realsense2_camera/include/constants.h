@@ -126,4 +126,7 @@ namespace realsense2_camera
     const std::string DEFAULT_TOPIC_ODOM_IN            = "";
 
     const float ROS_DEPTH_SCALE = 0.001;
+
+    // Kiwi added
+    const int COLOR_VIRTUAL_CAMERA     = -1; // -1 means no virtual camera writing
 }  // namespace realsense2_camera

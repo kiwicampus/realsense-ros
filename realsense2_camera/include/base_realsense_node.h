@@ -5,6 +5,9 @@
 #ifndef ___BASE_REALSENSE_NODE_HEADER___
 #define ___BASE_REALSENSE_NODE_HEADER___
 
+// Kiwi added
+#include "fake_webcam.hpp"
+
 #include <librealsense2/rs.hpp>
 #include <librealsense2/rsutil.h>
 #include "constants.h"
@@ -330,6 +333,11 @@ namespace realsense2_camera
         sensor_msgs::msg::PointCloud2 _msg_pointcloud;
         std::vector< unsigned int > _valid_pc_indices;
         std::shared_ptr<Parameters> _parameters;
+
+        // Kiwi additions
+        int _color_virtual_cam;
+        FakeWebcam* virtualcam;
+        double _color_last_timestamp = 0.0;
     };//end class
 }
 #endif //___BASE_REALSENSE_NODE_HEADER___
