@@ -84,7 +84,7 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'ordered_pc',                   'default': parse_bool2string(os.getenv('STEREO_ORDERED_POINTCLOUD','true')), 'description': ''},                           
                            {'name': 'calib_odom_file',              'default': "''", 'description': "''"},                           
                            {'name': 'topic_odom_in',                'default': "''", 'description': 'topic for T265 wheel odometry'},
-                           {'name': 'tf_publish_rate',              'default': '0.0', 'description': 'Rate of publishing static_tf'},
+                           {'name': 'tf_publish_rate',              'default': os.getenv('STEREO_TF_PUBLISH_RATE','0.0'), 'description': 'Rate of publishing static_tf'},
                            {'name': 'rosbag_filename',              'default': "''", 'description': 'A realsense bagfile to run from as a device'},
                            {'name': 'temporal.holes_fill',          'default': '0', 'description': 'Persistency mode'},
                            {'name': 'stereo_module.exposure.1',     'default': '7500', 'description': 'Initial value for hdr_merge filter'},
