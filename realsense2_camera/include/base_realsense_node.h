@@ -335,9 +335,22 @@ namespace realsense2_camera
         std::shared_ptr<Parameters> _parameters;
 
         // Kiwi additions
-        int _color_virtual_cam;
-        FakeWebcam* virtualcam;
+        FakeWebcam* _virtualcam;
         double _color_last_timestamp = 0.0;
+        // Constants
+        int _color_virtual_cam;
+        std::string _robot_base_frame;
+        // Position of camera in relation to robot base frame
+        float _camera_link_x;
+        float _camera_link_y;
+        float _camera_link_z;
+        // Imu accel vars
+        double _imu_accel_x = 0.0;
+        double _imu_accel_y = 0.0;
+        double _imu_accel_z = 0.0;
+        bool _imu_accel_initiated = false;
+        void publishChassisTransform(rclcpp::Time t);
+
     };//end class
 }
 #endif //___BASE_REALSENSE_NODE_HEADER___
