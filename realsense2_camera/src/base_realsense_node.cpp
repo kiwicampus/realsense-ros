@@ -2233,7 +2233,7 @@ void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t)
     double z_Buff = _imu_accel_y;  // corresponding to /camera/imu y
 
     double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
-    ROS_DEBUG_STREAM("Calculated pitch (degree): %f" << pitch*57.2958);
+    ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch*57.2958);
     quat.setRPY(0, pitch, 0);
 
     // for orientation we use local odom since it starts aligned with chassis, global is pointing north
