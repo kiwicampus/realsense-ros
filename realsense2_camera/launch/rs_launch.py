@@ -92,6 +92,10 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'stereo_module.exposure.2',     'default': '1', 'description': 'Initial value for hdr_merge filter'},
                            {'name': 'stereo_module.gain.2',         'default': '16', 'description': 'Initial value for hdr_merge filter'},
                            {'name': 'color_virtual_cam',            'default': os.getenv('STEREO_COLOR_VIRTUAL_CAMERA','-1'), 'description': 'virtual camera to write color stream'},                           
+                           {'name': 'robot_base_frame',             'default': os.getenv('STEREO_ROBOT_BASE_FRAME','chassis'), 'description': 'base frame for transform between camera and robot'},                           
+                           {'name': 'camera_link_x',                'default': os.getenv('STEREO_CAMERA_LINK_X','0.21'), 'description': 'x translation between base frame and camera'},                           
+                           {'name': 'camera_link_y',                'default': os.getenv('STEREO_CAMERA_LINK_Y','-0.041'), 'description': 'y translation between base frame and camera'},                           
+                           {'name': 'camera_link_z',                'default': os.getenv('STEREO_CAMERA_LINK_Z','0.404'), 'description': 'z translation between base frame and camera'},                           
                           ]
 
 def declare_configurable_parameters(parameters):

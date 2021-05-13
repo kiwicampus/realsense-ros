@@ -154,7 +154,7 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
                 std::placeholders::_2));
         // Kiwi added virtual cam
         if (_color_virtual_cam >= 0 ){
-            virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
+            _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
             _width[COLOR], _height[COLOR]);
         }
     }
@@ -916,6 +916,10 @@ void BaseRealSenseNode::getParameters()
 
     // Kiwi added
     setNgetNodeParameter(_color_virtual_cam, "color_virtual_cam", COLOR_VIRTUAL_CAMERA);
+    setNgetNodeParameter(_robot_base_frame, "robot_base_frame", ROBOT_BASE_FRAME);
+    setNgetNodeParameter(_camera_link_x, "camera_link_x", CAMERA_LINK_X);
+    setNgetNodeParameter(_camera_link_y, "camera_link_y", CAMERA_LINK_Y);
+    setNgetNodeParameter(_camera_link_z, "camera_link_z", CAMERA_LINK_Z);
 }
 
 void BaseRealSenseNode::setupDevice()
@@ -1562,7 +1566,7 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
 
     seq += 1;
 
-    if (0 != _synced_imu_publisher->getNumSubscribers())
+    if (0 != _synced_imu_publisher->getNumSubscribers() || (!_imu_accel_initiated) )
     {
         auto crnt_reading = *(reinterpret_cast<const float3*>(frame.get_data()));
         Eigen::Vector3d v(crnt_reading.x, crnt_reading.y, crnt_reading.z);
@@ -1584,6 +1588,13 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
             ImuMessage_AddDefaultValues(imu_msg);
             _synced_imu_publisher->Publish(imu_msg);
             ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+
+            // kiwi Added to calculate first accel measurements
+            _imu_accel_x = imu_msg.linear_acceleration.x;
+            _imu_accel_y = imu_msg.linear_acceleration.y;
+            _imu_accel_z = imu_msg.linear_acceleration.z;
+            _imu_accel_initiated = true;
+
             imu_msgs.pop_front();
         }
     }
@@ -2203,6 +2214,39 @@ void BaseRealSenseNode::publishStaticTransforms()
 
 }
 
+// Kiwi added transform for chassis and stereo position
+void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t)
+{
+    // ros2 run tf2_ros static_transform_publisher 0.21 -0.041 0.404 0 0.15708 0 chassis camera_link
+    geometry_msgs::msg::TransformStamped broadcaster_msg;
+    
+    // Our physical installation of realsense
+    broadcaster_msg.transform.translation.x = _camera_link_x;
+    broadcaster_msg.transform.translation.y = _camera_link_y;
+    broadcaster_msg.transform.translation.z = _camera_link_z;
+
+    tf2::Quaternion quat;
+    // Calculate pitch with imu accel data
+    // With respect to our robot 4.0, raw data: y is looking up, z forward and x to the left.
+    double x_Buff = _imu_accel_z;  // corresponding to /camera/imu z
+    double y_Buff = _imu_accel_x;  // corresponding to /camera/imu x
+    double z_Buff = _imu_accel_y;  // corresponding to /camera/imu y
+
+    double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
+    ROS_DEBUG_STREAM("Calculated pitch (degree): %f" << pitch*57.2958);
+    quat.setRPY(0, pitch, 0);
+
+    // for orientation we use local odom since it starts aligned with chassis, global is pointing north
+    broadcaster_msg.transform.rotation.x = quat[0];
+    broadcaster_msg.transform.rotation.y = quat[1];
+    broadcaster_msg.transform.rotation.z = quat[2];
+    broadcaster_msg.transform.rotation.w = quat[3];
+    broadcaster_msg.header.stamp = t;
+    broadcaster_msg.header.frame_id = _robot_base_frame;
+    broadcaster_msg.child_frame_id = "camera_link";
+    _dynamic_tf_broadcaster.sendTransform(broadcaster_msg);
+}
+
 void BaseRealSenseNode::publishDynamicTransforms()
 {
     // Publish transforms for the cameras
@@ -2217,6 +2261,11 @@ void BaseRealSenseNode::publishDynamicTransforms()
             rclcpp::Time t = _node.now();        
             for(auto& msg : _static_tf_msgs)
                 msg.header.stamp = t;
+
+            // Kiwi: add here pitch calculation from accelerometer to add transform to chassis
+            if (_imu_accel_initiated)
+                publishChassisTransform(t);
+
             _dynamic_tf_broadcaster.sendTransform(_static_tf_msgs);
         }
     }
@@ -2479,7 +2528,7 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         // cv::imshow("color", image);
         // cv::waitKey(1);
          if (_color_virtual_cam >= 0 )
-            virtualcam->schedule_frame(image);
+            _virtualcam->schedule_frame(image);
 
         double elapsed = t.seconds() - _color_last_timestamp;
         if (elapsed < 1.0/16) // rate might be higher than 15/16 FPS, we just want publishing at 15 FPS Max
