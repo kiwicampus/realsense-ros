@@ -21,15 +21,6 @@ from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.conditions import IfCondition
 
 
-def parse_bool2string(string):
-    try:
-        if int(string):
-            return 'true'
-        else:
-            return 'false'
-    except:
-        return string
-
 
 configurable_parameters = [{'name': 'camera_name',                  'default': 'camera', 'description': 'camera unique name'},
                            {'name': 'serial_no',                    'default': "''", 'description': 'choose device by serial number'},
@@ -40,16 +31,16 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'unite_imu_method',             'default': 'copy', 'description': '[copy|linear_interpolation]'},                           
                            {'name': 'json_file_path',               'default': "''", 'description': 'allows advanced configuration'},                           
                            {'name': 'output',                       'default': 'screen', 'description': 'pipe node output [screen|log]'},                           
-                           {'name': 'depth_width',                  'default': os.getenv('STEREO_DEPTH_WIDTH','640'), 'description': 'depth image width'},                           
-                           {'name': 'depth_height',                 'default': os.getenv('STEREO_DEPTH_HEIGHT','480'), 'description': 'depth image height'},                           
-                           {'name': 'enable_depth',                 'default': parse_bool2string(os.getenv('STEREO_DEPTH_ENABLE','true')), 'description': 'enable depth stream'},
-                           {'name': 'color_width',                  'default': os.getenv('STEREO_COLOR_WIDTH','640'), 'description': 'color image width'},                           
-                           {'name': 'color_height',                 'default': os.getenv('STEREO_COLOR_HEIGHT','480'), 'description': 'color image height'},                           
-                           {'name': 'enable_color',                 'default': parse_bool2string(os.getenv('STEREO_COLOR_ENABLE','true')), 'description': 'enable color stream'},
-                           {'name': 'infra_width',                  'default': os.getenv('STEREO_INFRA_WIDTH','640'), 'description': 'infra width'},
-                           {'name': 'infra_height',                 'default': os.getenv('STEREO_INFRA_HEIGHT','480'), 'description': 'infra width'},
-                           {'name': 'enable_infra1',                'default': parse_bool2string(os.getenv('STEREO_INFRA1_ENABLE','false')), 'description': 'enable infra1 stream'},
-                           {'name': 'enable_infra2',                'default': parse_bool2string(os.getenv('STEREO_INFRA2_ENABLE','false')), 'description': 'enable infra2 stream'},
+                           {'name': 'depth_width',                  'default': '640', 'description': 'depth image width'},                           
+                           {'name': 'depth_height',                 'default': '480', 'description': 'depth image height'},                           
+                           {'name': 'enable_depth',                 'default': 'true', 'description': 'enable depth stream'},
+                           {'name': 'color_width',                  'default': '640', 'description': 'color image width'},                           
+                           {'name': 'color_height',                 'default': '480', 'description': 'color image height'},                           
+                           {'name': 'enable_color',                 'default': 'true', 'description': 'enable color stream'},
+                           {'name': 'infra_width',                  'default': '640', 'description': 'infra width'},
+                           {'name': 'infra_height',                 'default': '480', 'description': 'infra width'},
+                           {'name': 'enable_infra1',                'default': 'false', 'description': 'enable infra1 stream'},
+                           {'name': 'enable_infra2',                'default': 'false', 'description': 'enable infra2 stream'},
                            {'name': 'infra_rgb',                    'default': 'false', 'description': 'enable infra2 stream'},
                            {'name': 'fisheye_width',                'default': '-1', 'description': 'fisheye width'},
                            {'name': 'fisheye_height',               'default': '-1', 'description': 'fisheye width'},
@@ -59,10 +50,10 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'confidence_height',            'default': '-1', 'description': 'depth image height'},                           
                            {'name': 'enable_confidence',            'default': 'false', 'description': 'enable depth stream'},
                            {'name': 'fisheye_fps',                  'default': '-1.', 'description': ''},                           
-                           {'name': 'depth_fps',                    'default': str(float(os.getenv('STEREO_DEPTH_FPS','30.'))), 'description': ''},                           
+                           {'name': 'depth_fps',                    'default': '30.', 'description': ''},                           
                            {'name': 'confidence_fps',               'default': '-1.', 'description': ''},                           
-                           {'name': 'infra_fps',                    'default': str(float(os.getenv('STEREO_INFRA_FPS','30.'))), 'description': ''},                           
-                           {'name': 'color_fps',                    'default': str(float(os.getenv('STEREO_COLOR_FPS','30.'))), 'description': ''},                           
+                           {'name': 'infra_fps',                    'default': '30.', 'description': ''},                           
+                           {'name': 'color_fps',                    'default': '30.', 'description': ''},                           
                            {'name': 'gyro_fps',                     'default': '-1.', 'description': ''},                           
                            {'name': 'accel_fps',                    'default': '-1.', 'description': ''},    
                            {'name': 'color_qos',                    'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
@@ -70,8 +61,8 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'depth_qos',                    'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
                            {'name': 'fisheye_qos',                  'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
                            {'name': 'infra_qos',                    'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
-                           {'name': 'enable_gyro',                  'default': parse_bool2string(os.getenv('STEREO_ENABLE_GYRO','false')), 'description': ''},                           
-                           {'name': 'enable_accel',                 'default': parse_bool2string(os.getenv('STEREO_ENABLE_ACCEL','false')), 'description': ''},                           
+                           {'name': 'enable_gyro',                  'default': 'false', 'description': ''},                           
+                           {'name': 'enable_accel',                 'default': 'false', 'description': ''},                           
                            {'name': 'pointcloud_texture_stream',    'default': 'RS2_STREAM_COLOR', 'description': 'texture stream for pointcloud'},                           
                            {'name': 'pointcloud_texture_index',     'default': '0', 'description': 'texture stream index for pointcloud'},                          
                            {'name': 'enable_sync',                  'default': 'false', 'description': ''},                           
@@ -81,21 +72,21 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'linear_accel_cov',             'default': '0.01', 'description': ''},                           
                            {'name': 'initial_reset',                'default': 'true', 'description': ''},                           
                            {'name': 'allow_no_texture_points',      'default': 'false', 'description': ''},                           
-                           {'name': 'ordered_pc',                   'default': parse_bool2string(os.getenv('STEREO_ORDERED_POINTCLOUD','true')), 'description': ''},                           
+                           {'name': 'ordered_pc',                   'default': 'true', 'description': ''},                           
                            {'name': 'calib_odom_file',              'default': "''", 'description': "''"},                           
                            {'name': 'topic_odom_in',                'default': "''", 'description': 'topic for T265 wheel odometry'},
-                           {'name': 'tf_publish_rate',              'default': os.getenv('STEREO_TF_PUBLISH_RATE','0.0'), 'description': 'Rate of publishing static_tf'},
+                           {'name': 'tf_publish_rate',              'default': '0.0', 'description': 'Rate of publishing static_tf'},
                            {'name': 'rosbag_filename',              'default': "''", 'description': 'A realsense bagfile to run from as a device'},
                            {'name': 'temporal.holes_fill',          'default': '0', 'description': 'Persistency mode'},
                            {'name': 'stereo_module.exposure.1',     'default': '7500', 'description': 'Initial value for hdr_merge filter'},
                            {'name': 'stereo_module.gain.1',         'default': '16', 'description': 'Initial value for hdr_merge filter'},
                            {'name': 'stereo_module.exposure.2',     'default': '1', 'description': 'Initial value for hdr_merge filter'},
                            {'name': 'stereo_module.gain.2',         'default': '16', 'description': 'Initial value for hdr_merge filter'},
-                           {'name': 'color_virtual_cam',            'default': os.getenv('STEREO_COLOR_VIRTUAL_CAMERA','-1'), 'description': 'virtual camera to write color stream'},                           
-                           {'name': 'robot_base_frame',             'default': os.getenv('STEREO_ROBOT_BASE_FRAME','chassis'), 'description': 'base frame for transform between camera and robot'},                           
-                           {'name': 'camera_link_x',                'default': os.getenv('STEREO_CAMERA_LINK_X','0.21'), 'description': 'x translation between base frame and camera'},                           
-                           {'name': 'camera_link_y',                'default': os.getenv('STEREO_CAMERA_LINK_Y','-0.041'), 'description': 'y translation between base frame and camera'},                           
-                           {'name': 'camera_link_z',                'default': os.getenv('STEREO_CAMERA_LINK_Z','0.404'), 'description': 'z translation between base frame and camera'},                           
+                           {'name': 'color_virtual_cam',            'default': '-1', 'description': 'virtual camera to write color stream'},                           
+                           {'name': 'robot_base_frame',             'default': 'chassis', 'description': 'base frame for transform between camera and robot'},                           
+                           {'name': 'camera_link_x',                'default': '0.21', 'description': 'x translation between base frame and camera'},                           
+                           {'name': 'camera_link_y',                'default': '-0.041', 'description': 'y translation between base frame and camera'},                           
+                           {'name': 'camera_link_z',                'default': '0.404', 'description': 'z translation between base frame and camera'},                           
                           ]
 
 def declare_configurable_parameters(parameters):
