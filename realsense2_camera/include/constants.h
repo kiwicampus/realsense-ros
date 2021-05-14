@@ -129,4 +129,8 @@ namespace realsense2_camera
 
     // Kiwi added
     const int COLOR_VIRTUAL_CAMERA     = -1; // -1 means no virtual camera writing
+    const std::string ROBOT_BASE_FRAME = "chassis";
+    const float CAMERA_LINK_X = 0.0;
+    const float CAMERA_LINK_Y = 0.0;
+    const float CAMERA_LINK_Z = 0.0;
 }  // namespace realsense2_camera
