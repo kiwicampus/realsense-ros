@@ -320,12 +320,30 @@ void BaseRealSenseNode::publishTopics()
     setupErrorCallback();
     enable_devices();
     setupPublishers();
+    setupServices();
     setupStreams();
     SetBaseStream();
     registerAutoExposureROIOptions();
     publishStaticTransforms();
     publishIntrinsics();
     ROS_INFO_STREAM("RealSense Node Is Up!");
+}
+
+void BaseRealSenseNode::setupServices(){
+    _get_coords_srv = _node.create_service<usr_srvs::srv::CoordinateReq>(
+              "get_coords",
+              std::bind(
+                &BaseRealSenseNode::get_coords_cb,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
+}
+
+bool BaseRealSenseNode::get_coords_cb(usr_srvs::srv::CoordinateReq::Request::SharedPtr req, usr_srvs::srv::CoordinateReq::Response::SharedPtr res){
+    std::cout << "srv\n";
+    std::array<float, 3> pixel_coords = {1.0, 1.0, 1.0};
+    res->xyz_coordinate = pixel_coords;
+    return true;
 }
 
 void BaseRealSenseNode::runFirstFrameInitialization(rs2_stream stream_type)
