@@ -340,9 +340,13 @@ void BaseRealSenseNode::setupServices(){
 }
 
 bool BaseRealSenseNode::get_coords_cb(usr_srvs::srv::CoordinateReq::Request::SharedPtr req, usr_srvs::srv::CoordinateReq::Response::SharedPtr res){
-    std::cout << "srv\n";
-    std::array<float, 3> pixel_coords = {1.0, 1.0, 1.0};
-    res->xyz_coordinate = pixel_coords;
+    std::array<float, 2> _pixel_requested = req->pixel_requested;
+    _pixel_idx_requested = _pixel_requested[1]*_msg_pointcloud.width +  _pixel_requested[0]; 
+    _get_coords = true;
+    while(_get_coords);
+    _pixel_requested_coords[0] = _coord_x; _pixel_requested_coords[1] = _coord_y; _pixel_requested_coords[2] = _coord_z;
+    res->xyz_coordinate = _pixel_requested_coords;
+    std::cout << "cords " << _pixel_requested_coords[0] << " " << _pixel_requested_coords[1] << " " << _pixel_requested_coords[2] <<std::endl;
     return true;
 }
 
@@ -2391,9 +2395,9 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
         sensor_msgs::PointCloud2Iterator<float>iter_z(_msg_pointcloud, "z");
         sensor_msgs::PointCloud2Iterator<uint8_t>iter_color(_msg_pointcloud, format_str);
         color_point = pc.get_texture_coordinates();
-
         float color_pixel[2];
-        for (size_t point_idx=0; point_idx < pc.size(); point_idx++, vertex++, color_point++)
+        size_t point_idx;
+        for (point_idx=0; point_idx < pc.size(); point_idx++, vertex++, color_point++)
         {
             float i(color_point->u);
             float j(color_point->v);
@@ -2404,6 +2408,14 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
                 *iter_x = vertex->x;
                 *iter_y = vertex->y;
                 *iter_z = vertex->z;
+
+                if(_get_coords && _pixel_idx_requested == point_idx){
+                    // std::cout << "found point on index " << point_idx << "cords " << vertex->x << " " << vertex->y << " " << vertex->z <<std::endl;
+                    _coord_x = vertex->x;
+                    _coord_y = vertex->y; 
+                    _coord_z = vertex->z;
+                    _get_coords = false;
+                }
 
                 if (valid_color_pixel)
                 {
@@ -2453,6 +2465,12 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
         _msg_pointcloud.height = 1;
         _msg_pointcloud.is_dense = true;
         modifier.resize(valid_count);
+    }
+    if(_get_coords){
+        _coord_x = 0;
+        _coord_y = 0; 
+        _coord_z = 0;
+        _get_coords = false;
     }
     _pointcloud_publisher->publish(_msg_pointcloud);
 }
