@@ -7,8 +7,8 @@ LibRealSense supported version: v2.45.0 (see [realsense2_camera release notes](h
 The following additions were made to the wrapper.
 
 #### Custom services
-We added the package [realsense2_camera_srvs]() that contains the following services:
-  - [CoordinateReq.srv](): Used to request the real world coordinates of a pixel on the RGB image produced from the camera. A server for this service is created in ´base_realsense_node´ with the name ´/camera/get_coords´. This allows to reduce the PointCloud2 topic subscriptions to reduce the overall computational load in the ROS2 system.
+We added the package [realsense2_camera_srvs](https://github.com/kiwicampus/realsense-ros/tree/feature/realsense-coords-srv/realsense2_camera_srvs) that contains the following services:
+  - [CoordinateReq.srv](https://github.com/kiwicampus/realsense-ros/blob/feature/realsense-coords-srv/realsense2_camera_srvs/srv/CoordinateReq.srv): Used to request the real world coordinates of a pixel on the RGB image produced from the camera. A server for this service is created in ´base_realsense_node´ with the name ´/camera/get_coords´. This allows to reduce the PointCloud2 topic subscriptions to reduce the overall computational load in the ROS2 system.
 
 #### Camera transform publisher
 We added a transform broadcaster that publishes the pitch of the realsense camera based on the IMU readings at a given rate. 
