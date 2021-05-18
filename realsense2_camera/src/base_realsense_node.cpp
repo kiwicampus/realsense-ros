@@ -157,6 +157,10 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
             _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
             _width[COLOR], _height[COLOR]);
         }
+        // Subscriber for shuting down node
+        _shutdown_subscriber = _node.create_subscription<std_msgs::msg::Empty>("shutdown", 1, 
+                                    std::bind(&BaseRealSenseNode::shutdown_callback, this, std::placeholders::_1));
+        
     }
     catch(const std::exception& e)
     {
@@ -165,6 +169,14 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
         throw;
     }
     
+}
+
+void BaseRealSenseNode::shutdown_callback(const std_msgs::msg::Empty::SharedPtr msg)
+{
+    (void)msg;
+    RCLCPP_WARN(_node.get_logger(), "SHUTTING DOWN NODE");
+    clean();
+    rclcpp::shutdown(); 
 }
 
 void BaseRealSenseNode::clean()
