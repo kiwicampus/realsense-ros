@@ -3,6 +3,17 @@ These are packages for using Intel RealSense cameras (D400 and L500 series, SR30
 
 LibRealSense supported version: v2.45.0 (see [realsense2_camera release notes](https://github.com/IntelRealSense/realsense-ros/releases))
 
+## Kiwi additions
+The following additions were made to the wrapper.
+
+#### Custom services
+We added the package [realsense2_camera_srvs]() that contains the following services:
+  - [CoordinateReq.srv](): Used to request the real world coordinates of a pixel on the RGB image produced from the camera. A server for this service is created in ´base_realsense_node´ with the name ´/camera/get_coords´. This allows to reduce the PointCloud2 topic subscriptions to reduce the overall computational load in the ROS2 system.
+
+#### Camera transform publisher
+We added a transform broadcaster that publishes the pitch of the realsense camera based on the IMU readings at a given rate. 
+
+
 ## Installation Instructions
 This version supports ROS2 Dashing, Eloquent and Foxy.
 
