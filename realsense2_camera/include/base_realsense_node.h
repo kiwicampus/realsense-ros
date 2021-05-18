@@ -34,7 +34,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_srvs/srv/set_bool.hpp>
-#include <usr_srvs/srv/coordinate_req.hpp>
+#include <realsense2_camera_srvs/srv/coordinate_req.hpp>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -353,8 +353,8 @@ namespace realsense2_camera
         void publishChassisTransform(rclcpp::Time t);
 
         //coordinate service
-        rclcpp::Service<usr_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
-        bool get_coords_cb(usr_srvs::srv::CoordinateReq::Request::SharedPtr req, usr_srvs::srv::CoordinateReq::Response::SharedPtr res);
+        rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
+        bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
         void setupServices();
         std::atomic<size_t> _pixel_idx_requested;
         std::atomic<bool> _get_coords;

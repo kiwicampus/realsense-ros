@@ -330,7 +330,7 @@ void BaseRealSenseNode::publishTopics()
 }
 
 void BaseRealSenseNode::setupServices(){
-    _get_coords_srv = _node.create_service<usr_srvs::srv::CoordinateReq>(
+    _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
               "get_coords",
               std::bind(
                 &BaseRealSenseNode::get_coords_cb,
@@ -339,7 +339,7 @@ void BaseRealSenseNode::setupServices(){
                 std::placeholders::_2));
 }
 
-bool BaseRealSenseNode::get_coords_cb(usr_srvs::srv::CoordinateReq::Request::SharedPtr req, usr_srvs::srv::CoordinateReq::Response::SharedPtr res){
+bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
     std::array<float, 2> _pixel_requested = req->pixel_requested;
     _pixel_idx_requested = _pixel_requested[1]*_msg_pointcloud.width +  _pixel_requested[0]; 
     _get_coords = true;
