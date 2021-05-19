@@ -5,9 +5,6 @@
 #ifndef ___BASE_REALSENSE_NODE_HEADER___
 #define ___BASE_REALSENSE_NODE_HEADER___
 
-// Kiwi added
-#include "fake_webcam.hpp"
-
 #include <librealsense2/rs.hpp>
 #include <librealsense2/rsutil.h>
 #include "constants.h"
@@ -45,6 +42,12 @@
 #include <mutex>
 #include <atomic>
 #include <thread>
+
+// Kiwi added
+#include "fake_webcam.hpp"
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 
 using realsense2_camera_msgs::msg::Extrinsics;
 using realsense2_camera_msgs::msg::IMUInfo;
@@ -350,6 +353,10 @@ namespace realsense2_camera
         double _imu_accel_z = 0.0;
         bool _imu_accel_initiated = false;
         void publishChassisTransform(rclcpp::Time t);
+
+
+        std::unique_ptr<tf2_ros::Buffer> _buffer_tf2;
+        std::shared_ptr<tf2_ros::TransformListener> _listener_tf2;
 
     };//end class
 }

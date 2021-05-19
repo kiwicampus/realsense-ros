@@ -142,6 +142,10 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
 
     _monitor_options = {RS2_OPTION_ASIC_TEMPERATURE, RS2_OPTION_PROJECTOR_TEMPERATURE};
 
+    // kiwi added
+    _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock());
+    _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2);
+
     try
     {
         publishTopics();
@@ -2217,34 +2221,57 @@ void BaseRealSenseNode::publishStaticTransforms()
 // Kiwi added transform for chassis and stereo position
 void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t)
 {
-    // ros2 run tf2_ros static_transform_publisher 0.21 -0.041 0.404 0 0.15708 0 chassis camera_link
-    geometry_msgs::msg::TransformStamped broadcaster_msg;
-    
-    // Our physical installation of realsense
-    broadcaster_msg.transform.translation.x = _camera_link_x;
-    broadcaster_msg.transform.translation.y = _camera_link_y;
-    broadcaster_msg.transform.translation.z = _camera_link_z;
 
-    tf2::Quaternion quat;
-    // Calculate pitch with imu accel data
-    // With respect to our robot 4.0, raw data: y is looking up, z forward and x to the left.
-    double x_Buff = _imu_accel_z;  // corresponding to /camera/imu z
-    double y_Buff = _imu_accel_x;  // corresponding to /camera/imu x
-    double z_Buff = _imu_accel_y;  // corresponding to /camera/imu y
+    if (_buffer_tf2->canTransform("camera_link", "camera_imu_optical_frame", tf2::TimePointZero))
+    {
+        // Transform from imu frame to camera_link frame
+        geometry_msgs::msg::Vector3Stamped imu_vector_accel;
+        // https://www.intelrealsense.com/how-to-getting-imu-data-from-d435i-and-t265/
+        // To agree with that coordinate system, real measurements need to be negated
+        imu_vector_accel.vector.x = -_imu_accel_x;
+        imu_vector_accel.vector.y = -_imu_accel_y;
+        imu_vector_accel.vector.z = -_imu_accel_z;
+        imu_vector_accel.header.frame_id = "camera_imu_optical_frame";
 
-    double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
-    ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch*57.2958);
-    quat.setRPY(0, pitch, 0);
+        ROS_INFO_STREAM_ONCE("before transform x: " << imu_vector_accel.vector.x << " y: " << imu_vector_accel.vector.y << " z: "<< imu_vector_accel.vector.z);
 
-    // for orientation we use local odom since it starts aligned with chassis, global is pointing north
-    broadcaster_msg.transform.rotation.x = quat[0];
-    broadcaster_msg.transform.rotation.y = quat[1];
-    broadcaster_msg.transform.rotation.z = quat[2];
-    broadcaster_msg.transform.rotation.w = quat[3];
-    broadcaster_msg.header.stamp = t;
-    broadcaster_msg.header.frame_id = _robot_base_frame;
-    broadcaster_msg.child_frame_id = "camera_link";
-    _dynamic_tf_broadcaster.sendTransform(broadcaster_msg);
+        imu_vector_accel = _buffer_tf2->transform(imu_vector_accel, "camera_link", tf2::durationFromSec(0.5));
+        ROS_INFO_STREAM_ONCE("after transform x: " << imu_vector_accel.vector.x << " y: " << imu_vector_accel.vector.y << " z: "<< imu_vector_accel.vector.z);
+
+        // Now calculate pitch based on accel measurements
+        double x_Buff = imu_vector_accel.vector.x;
+        double y_Buff = imu_vector_accel.vector.y;
+        double z_Buff = imu_vector_accel.vector.z;
+
+        // https://wiki.dfrobot.com/How_to_Use_a_Three-Axis_Accelerometer_for_Tilt_Sensing
+        double pitch = atan2((x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
+        ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch*57.2958);
+
+        // ros2 run tf2_ros static_transform_publisher 0.21 -0.041 0.404 0 0.15708 0 chassis camera_link
+        geometry_msgs::msg::TransformStamped broadcaster_msg;
+        
+        // Our physical installation of realsense
+        broadcaster_msg.transform.translation.x = _camera_link_x;
+        broadcaster_msg.transform.translation.y = _camera_link_y;
+        broadcaster_msg.transform.translation.z = _camera_link_z;
+
+        // Calculate rotation based on pitch angle
+        tf2::Quaternion quat;
+        quat.setRPY(0, pitch, 0);
+
+        // populate with quaternions
+        broadcaster_msg.transform.rotation.x = quat[0];
+        broadcaster_msg.transform.rotation.y = quat[1];
+        broadcaster_msg.transform.rotation.z = quat[2];
+        broadcaster_msg.transform.rotation.w = quat[3];
+        broadcaster_msg.header.stamp = t;
+        broadcaster_msg.header.frame_id = _robot_base_frame;
+        broadcaster_msg.child_frame_id = "camera_link";
+        _dynamic_tf_broadcaster.sendTransform(broadcaster_msg);
+    }
+    else
+        ROS_INFO_STREAM_ONCE("cannot transform find transform between camera_link and camera_imu_optical_frame");
+
 }
 
 void BaseRealSenseNode::publishDynamicTransforms()
@@ -2262,11 +2289,11 @@ void BaseRealSenseNode::publishDynamicTransforms()
             for(auto& msg : _static_tf_msgs)
                 msg.header.stamp = t;
 
+            _dynamic_tf_broadcaster.sendTransform(_static_tf_msgs);
+
             // Kiwi: add here pitch calculation from accelerometer to add transform to chassis
             if (_imu_accel_initiated)
                 publishChassisTransform(t);
-
-            _dynamic_tf_broadcaster.sendTransform(_static_tf_msgs);
         }
     }
 }
