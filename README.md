@@ -8,7 +8,7 @@ The following additions were made to the wrapper.
 
 #### Custom services
 We added the package [realsense2_camera_srvs](https://github.com/kiwicampus/realsense-ros/tree/feature/realsense-coords-srv/realsense2_camera_srvs) that contains the following services:
-  - [CoordinateReq.srv](https://github.com/kiwicampus/realsense-ros/blob/feature/realsense-coords-srv/realsense2_camera_srvs/srv/CoordinateReq.srv): Used to request the real world coordinates of a pixel on the RGB image produced from the camera. A server for this service is created in ´base_realsense_node´ with the name ´/camera/get_coords´. This allows to reduce the PointCloud2 topic subscriptions to reduce the overall computational load in the ROS2 system.
+  - [CoordinateReq.srv](https://github.com/kiwicampus/realsense-ros/blob/feature/realsense-coords-srv/realsense2_camera_srvs/srv/CoordinateReq.srv): Used to request the real world coordinates of a pixel on the RGB image produced from the camera. A server for this service is created in ´base_realsense_node´ with the name ´/camera/get_coords´. This allows to limit the PointCloud2 topic subscriptions and reduce the overall computational load in the ROS2 system. The service now supports the request of coordinates for multiple points. It takes a vector of geometry_msgs::Point and returns another vector of geometry_msgs::Point with the real world coordinates of each element of the input keeping the same order.
 
 #### Camera transform publisher
 We added a transform broadcaster that publishes the pitch of the realsense camera based on the IMU readings at a given rate. 
