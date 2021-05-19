@@ -358,6 +358,7 @@ namespace realsense2_camera
         bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
         void setupServices();
         std::atomic<double> _cam_pitch;
+        //DO NOT WRITE THIS VARIABLE, ONLY READ OPERATIONS ARE ALLOWED
         std::atomic<rs2::vertex*> _vertex;
 
     };//end class
