@@ -366,7 +366,7 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
     //     Eigen::Vector3f v(_coord_x, _coord_y, _coord_z);
 
     //     // Eigen::Matrix3f m;
-    //     // m = Eigen::AngleAxisf((-90.0 + _cam_pitch)*M_PI/180, Eigen::Vector3f::UnitX())*Eigen::AngleAxisf(M_PI_2, Eigen::Vector3f::UnitY());
+    //     // m = Eigen::AngleAxisf(-M_PI_2, Eigen::Vector3f::UnitZ())*Eigen::AngleAxisf((-90.0 -_cam_pitch)*M_PI/180, Eigen::Vector3f::UnitX());
     //     // v = m*v;
     //     // std::cout << _cam_pitch << std::endl;
     //     _pixel_requested_coords[0] = v[0]; _pixel_requested_coords[1] = v[1]; _pixel_requested_coords[2] = v[2];
