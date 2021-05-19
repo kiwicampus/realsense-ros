@@ -94,6 +94,7 @@ find_package(realsense2_camera_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
@@ -158,6 +159,7 @@ set(dependencies
   std_msgs
   std_srvs
   sensor_msgs
+  geometry_msgs
   nav_msgs
   tf2
   realsense2

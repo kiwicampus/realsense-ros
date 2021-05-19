@@ -31,6 +31,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
+#include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_srvs/srv/set_bool.hpp>
@@ -362,6 +363,7 @@ namespace realsense2_camera
         std::atomic<float> _coord_z;
         std::array<float, 3> _pixel_requested_coords;
         std::atomic<double> _cam_pitch;
+        std::atomic<rs2::vertex*> _vertex;
 
     };//end class
 }
