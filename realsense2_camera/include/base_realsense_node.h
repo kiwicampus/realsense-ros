@@ -357,11 +357,6 @@ namespace realsense2_camera
         rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
         bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
         void setupServices();
-        std::atomic<size_t> _pixel_idx_requested;
-        std::atomic<float> _coord_x;
-        std::atomic<float> _coord_y;
-        std::atomic<float> _coord_z;
-        std::array<float, 3> _pixel_requested_coords;
         std::atomic<double> _cam_pitch;
         std::atomic<rs2::vertex*> _vertex;
 

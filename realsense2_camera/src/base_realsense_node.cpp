@@ -347,32 +347,26 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
     for(size_t i = 0; i < _pixel_requested.size(); i++){
         geometry_msgs::msg::Point point_requested = _pixel_requested[i];
         geometry_msgs::msg::Point point_requested_coords;
-        size_t pixel_idx_requested = point_requested.y*_msg_pointcloud.width +  point_requested.x;
-        point_requested_coords.x = (_vertex+pixel_idx_requested)->x;
-        point_requested_coords.y = (_vertex+pixel_idx_requested)->y; 
-        point_requested_coords.z = (_vertex+pixel_idx_requested)->z;
-        _pixel_requested_coords.push_back(point_requested_coords);
-        
+        if(_node.now() - _msg_pointcloud.header.stamp > rclcpp::Duration(3, 0)){
+            point_requested_coords.x = -1.0f;
+            point_requested_coords.y = -1.0f; 
+            point_requested_coords.z = -1.0f;
+            ROS_WARN("Warning: Pointcloud not beeing received");
+        }else{
+            size_t pixel_idx_requested = point_requested.y*_msg_pointcloud.width +  point_requested.x;  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
+            point_requested_coords.x = (_vertex+pixel_idx_requested)->x;
+            point_requested_coords.y = (_vertex+pixel_idx_requested)->y; 
+            point_requested_coords.z = (_vertex+pixel_idx_requested)->z;
+            // an Eigen vector is created to easily apply spatial transforms, however the coords are published in the camera frame for now
+            Eigen::Vector3f v(point_requested_coords.x, point_requested_coords.y, point_requested_coords.z);
+            Eigen::Matrix3f m;
+            m = Eigen::AngleAxisf(-M_PI_2, Eigen::Vector3f::UnitZ())*Eigen::AngleAxisf((-90.0 -_cam_pitch)*M_PI/180, Eigen::Vector3f::UnitX());
+            v = m*v;
+            point_requested_coords.x = v[0]; point_requested_coords.y = v[1]; point_requested_coords.z = v[2];
+        }
+        _pixel_requested_coords.push_back(point_requested_coords);       
     }
     res -> xyz_coordinate = _pixel_requested_coords;
-    // _pixel_idx_requested = _pixel_requested[1]*_msg_pointcloud.width +  _pixel_requested[0]; // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
-    //check if a pointcloud message has been published within 3 seconds
-    // if(_node.now() - _msg_pointcloud.header.stamp > rclcpp::Duration(3, 0)){
-    //     _pixel_requested_coords[0] = -1; _pixel_requested_coords[1] = -1; _pixel_requested_coords[2] = -1;
-    //     ROS_WARN("Warning: Pointcloud not beeing published");
-    //     // res->xyz_coordinate = _pixel_requested_coords;
-    // }else{
-    //     // an Eigen vector is created to easily apply spatial transforms, however the coords are published in the camera frame for now
-    //     Eigen::Vector3f v(_coord_x, _coord_y, _coord_z);
-
-    //     // Eigen::Matrix3f m;
-    //     // m = Eigen::AngleAxisf(-M_PI_2, Eigen::Vector3f::UnitZ())*Eigen::AngleAxisf((-90.0 -_cam_pitch)*M_PI/180, Eigen::Vector3f::UnitX());
-    //     // v = m*v;
-    //     // std::cout << _cam_pitch << std::endl;
-    //     _pixel_requested_coords[0] = v[0]; _pixel_requested_coords[1] = v[1]; _pixel_requested_coords[2] = v[2];
-    //     res->xyz_coordinate = _pixel_requested_coords;
-    //     // std::cout << "cords " << _pixel_requested_coords[0] << " " << _pixel_requested_coords[1] << " " << _pixel_requested_coords[2] <<std::endl;
-    // }
     return true;
     
 }
@@ -2429,9 +2423,6 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
 
         //The real world coords are obtained adding the requested pixel index to the pointer that points to the pixel with coords 0,0
         _vertex = const_cast<rs2::vertex*>(pc.get_vertices());
-        _coord_x = (vertex+_pixel_idx_requested)->x;
-        _coord_y = (vertex+_pixel_idx_requested)->y; 
-        _coord_z = (vertex+_pixel_idx_requested)->z;
         _msg_pointcloud.header.stamp = t;
 
         //the condition on top is translated here to avoid the for loop if there are no pointcloud subscriber
