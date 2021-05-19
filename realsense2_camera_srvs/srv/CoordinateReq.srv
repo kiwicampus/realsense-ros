@@ -1,0 +1,4 @@
+geometry_msgs/Point[] pixel_requested # Being [0] Width and [1] Height
+bool on_camera_frame
+---
+geometry_msgs/Point[] xyz_coordinate

@@ -31,9 +31,11 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
+#include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+#include <realsense2_camera_srvs/srv/coordinate_req.hpp>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -350,6 +352,14 @@ namespace realsense2_camera
         double _imu_accel_z = 0.0;
         bool _imu_accel_initiated = false;
         void publishChassisTransform(rclcpp::Time t);
+
+        //coordinate service
+        rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
+        bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
+        void setupServices();
+        std::atomic<double> _cam_pitch;
+        //DO NOT WRITE THIS VARIABLE, ONLY READ OPERATIONS ARE ALLOWED
+        std::atomic<rs2::vertex*> _vertex;
 
     };//end class
 }
