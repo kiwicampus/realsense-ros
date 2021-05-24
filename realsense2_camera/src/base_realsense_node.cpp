@@ -354,7 +354,7 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
             point_requested_coords.z = -1.0f;
             ROS_WARN("Warning: Pointcloud not beeing generated");
         }else{
-            size_t pixel_idx_requested = point_requested.y*_msg_pointcloud.width +  point_requested.x;  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
+            size_t pixel_idx_requested = trunc(point_requested.y)*_msg_pointcloud.width +  trunc(point_requested.x);  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
             // WARNING!!! DO NOT CHANGE THE VALUE OF _vertex 
             point_requested_coords.x = (_vertex+pixel_idx_requested)->x;
             point_requested_coords.y = (_vertex+pixel_idx_requested)->y; 
