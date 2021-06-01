@@ -269,7 +269,7 @@ bool BaseRealSenseNode::toggleSensors(bool enabled, std::string& msg)
         catch(const rs2::wrong_api_call_sequence_error& e)
         {
             msg = "Device is already ON.";
-            ROS_WARN(msg);
+            ROS_WARN("%s", msg.c_str());
             return false;
         }
     }
@@ -291,7 +291,7 @@ bool BaseRealSenseNode::toggleSensors(bool enabled, std::string& msg)
             catch(const rs2::wrong_api_call_sequence_error& e)
             {
                 msg = "Device is already OFF.";
-                ROS_WARN(msg);
+                ROS_WARN("%s", msg.c_str());
                 return false;
             }
         }
@@ -334,12 +334,59 @@ void BaseRealSenseNode::publishTopics()
     setupErrorCallback();
     enable_devices();
     setupPublishers();
+    setupServices();
     setupStreams();
     SetBaseStream();
     registerAutoExposureROIOptions();
     publishStaticTransforms();
     publishIntrinsics();
     ROS_INFO_STREAM("RealSense Node Is Up!");
+}
+
+void BaseRealSenseNode::setupServices(){
+    // create a service named /camera/get_coords
+    _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
+              "get_coords",
+              std::bind(
+                &BaseRealSenseNode::get_coords_cb,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
+    _cam_pitch = atof(getenv("STEREO_ANGLE"));
+}
+
+bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
+    std::vector<geometry_msgs::msg::Point> _pixel_requested = req->pixel_requested;
+    bool on_camera_frame = req->on_camera_frame;
+    std::vector<geometry_msgs::msg::Point> _pixel_requested_coords; 
+    for(size_t i = 0; i < _pixel_requested.size(); i++){
+        geometry_msgs::msg::Point point_requested = _pixel_requested[i];
+        geometry_msgs::msg::Point point_requested_coords;
+        if(_node.now() - _msg_pointcloud.header.stamp > rclcpp::Duration(3, 0)){
+            point_requested_coords.x = -1.0f;
+            point_requested_coords.y = -1.0f; 
+            point_requested_coords.z = -1.0f;
+            ROS_WARN("Warning: Pointcloud not beeing generated");
+        }else{
+            size_t pixel_idx_requested = trunc(point_requested.y)*_msg_pointcloud.width +  trunc(point_requested.x);  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
+            // WARNING!!! DO NOT CHANGE THE VALUE OF _vertex 
+            point_requested_coords.x = (_vertex+pixel_idx_requested)->x;
+            point_requested_coords.y = (_vertex+pixel_idx_requested)->y; 
+            point_requested_coords.z = (_vertex+pixel_idx_requested)->z;
+            if(!on_camera_frame){
+                // an Eigen vector is created to easily apply spatial transforms, however the coords are published in the camera frame for now
+                Eigen::Vector3f v(point_requested_coords.x, point_requested_coords.y, point_requested_coords.z);
+                Eigen::Matrix3f m;
+                m = Eigen::AngleAxisf(-M_PI_2, Eigen::Vector3f::UnitZ())*Eigen::AngleAxisf((-90.0 -_cam_pitch)*M_PI/180, Eigen::Vector3f::UnitX());
+                v = m*v;
+                point_requested_coords.x = v[0]; point_requested_coords.y = v[1]; point_requested_coords.z = v[2];
+            }
+        }
+        _pixel_requested_coords.push_back(point_requested_coords);       
+    }
+    res -> xyz_coordinate = _pixel_requested_coords;
+    return true;
+    
 }
 
 void BaseRealSenseNode::runFirstFrameInitialization(rs2_stream stream_type)
@@ -2247,6 +2294,7 @@ void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t)
     double z_Buff = _imu_accel_y;  // corresponding to /camera/imu y
 
     double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
+    _cam_pitch = pitch;
     ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch*57.2958);
     quat.setRPY(0, pitch, 0);
 
@@ -2313,8 +2361,10 @@ void reverse_memcpy(unsigned char* dst, const unsigned char* src, size_t n)
 
 void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset)
 {
-    if (0 == _pointcloud_publisher->get_subscription_count())
-        return;
+    // as services are going to be implemented directly in this node, this condition will be translated
+    // to before the for loop that brings the overhead to the process
+    // if (0 == _pointcloud_publisher->get_subscription_count())
+    //     return;
     ROS_INFO_STREAM_ONCE("publishing " << (_ordered_pc ? "" : "un") << "ordered pointcloud.");
 
     rs2_stream texture_source_id = static_cast<rs2_stream>(_pointcloud_filter->get_option(rs2_option::RS2_OPTION_STREAM_FILTER));
@@ -2387,9 +2437,18 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
         sensor_msgs::PointCloud2Iterator<float>iter_z(_msg_pointcloud, "z");
         sensor_msgs::PointCloud2Iterator<uint8_t>iter_color(_msg_pointcloud, format_str);
         color_point = pc.get_texture_coordinates();
-
         float color_pixel[2];
-        for (size_t point_idx=0; point_idx < pc.size(); point_idx++, vertex++, color_point++)
+
+        //The real world coords are obtained adding the requested pixel index to the pointer that points to the pixel with coords 0,0
+        _vertex = const_cast<rs2::vertex*>(pc.get_vertices());
+        _msg_pointcloud.header.stamp = t;
+
+        //the condition on top is translated here to avoid the for loop if there are no pointcloud subscriber
+        if (0 == _pointcloud_publisher->get_subscription_count()){
+            return;
+        }
+        size_t point_idx;
+        for (point_idx=0; point_idx < pc.size(); point_idx++, vertex++, color_point++)
         {
             float i(color_point->u);
             float j(color_point->v);
@@ -2440,7 +2499,6 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
             }
         }
     }
-    _msg_pointcloud.header.stamp = t;
     if (_align_depth) _msg_pointcloud.header.frame_id = _optical_frame_id[COLOR];
     else              _msg_pointcloud.header.frame_id = _optical_frame_id[DEPTH];
     if (!_ordered_pc)
