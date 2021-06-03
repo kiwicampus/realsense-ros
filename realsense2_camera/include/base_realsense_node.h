@@ -7,6 +7,7 @@
 
 // Kiwi added
 #include "fake_webcam.hpp"
+#include <std_msgs/msg/empty.hpp>
 
 #include <librealsense2/rs.hpp>
 #include <librealsense2/rsutil.h>
@@ -352,6 +353,9 @@ namespace realsense2_camera
         double _imu_accel_z = 0.0;
         bool _imu_accel_initiated = false;
         void publishChassisTransform(rclcpp::Time t);
+        // Subscriber for shutting down
+        rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr _shutdown_subscriber;
+        void shutdown_callback(const std_msgs::msg::Empty::SharedPtr msg);
 
         //coordinate service
         rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;

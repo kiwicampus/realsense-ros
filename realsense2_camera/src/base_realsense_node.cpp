@@ -157,6 +157,10 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
             _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
             _width[COLOR], _height[COLOR]);
         }
+        // Subscriber for shuting down node
+        _shutdown_subscriber = _node.create_subscription<std_msgs::msg::Empty>("shutdown", 1, 
+                                    std::bind(&BaseRealSenseNode::shutdown_callback, this, std::placeholders::_1));
+        
     }
     catch(const std::exception& e)
     {
@@ -165,6 +169,14 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
         throw;
     }
     
+}
+
+void BaseRealSenseNode::shutdown_callback(const std_msgs::msg::Empty::SharedPtr msg)
+{
+    (void)msg;
+    RCLCPP_WARN(_node.get_logger(), "SHUTTING DOWN NODE");
+    clean();
+    rclcpp::shutdown(); 
 }
 
 void BaseRealSenseNode::clean()
@@ -299,6 +311,8 @@ void BaseRealSenseNode::setupErrorCallback()
             if (n.get_severity() >= RS2_LOG_SEVERITY_ERROR)
             {
                 ROS_WARN_STREAM("Hardware Notification:" << n.get_description() << "," << n.get_timestamp() << "," << n.get_severity() << "," << n.get_category());
+                // ROS_WARN_STREAM("Performing Hardware Reset.");
+                // _dev.hardware_reset();
             }
             if (error_strings.end() != find_if(error_strings.begin(), error_strings.end(), [&n] (std::string err) 
                                         {return (n.get_description().find(err) != std::string::npos); }))
