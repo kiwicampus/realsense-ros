@@ -352,6 +352,13 @@ void BaseRealSenseNode::setupServices(){
                 this,
                 std::placeholders::_1,
                 std::placeholders::_2));
+    _get_version_srv = _node.create_service<realsense2_camera_srvs::srv::VersionReq>(
+              "get_version",
+              std::bind(
+                &BaseRealSenseNode::get_version_cb,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
     _cam_pitch = atof(getenv("STEREO_ANGLE"));
 }
 
@@ -387,6 +394,11 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
     res -> xyz_coordinate = _pixel_requested_coords;
     return true;
     
+}
+
+bool BaseRealSenseNode::get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res){
+    res->version=_dev.get_info(RS2_CAMERA_INFO_FIRMWARE_VERSION);
+    return true;
 }
 
 void BaseRealSenseNode::runFirstFrameInitialization(rs2_stream stream_type)
