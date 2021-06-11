@@ -37,6 +37,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <realsense2_camera_srvs/srv/coordinate_req.hpp>
+#include <realsense2_camera_srvs/srv/version_req.hpp>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -364,6 +365,10 @@ namespace realsense2_camera
         std::atomic<double> _cam_pitch;
         //DO NOT WRITE THIS VARIABLE, ONLY READ OPERATIONS ARE ALLOWED
         std::atomic<rs2::vertex*> _vertex;
+        rclcpp::Service<realsense2_camera_srvs::srv::VersionReq>::SharedPtr _get_version_srv;
+        bool get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res);
+        //version service:
+
 
     };//end class
 }
