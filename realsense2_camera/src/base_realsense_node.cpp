@@ -414,8 +414,19 @@ bool BaseRealSenseNode::get_version_cb(realsense2_camera_srvs::srv::VersionReq::
 
 bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res)
 {
-    for(auto pixel: req->points_requested)
+    std::cout << "received pixel request";
+    for(auto point: req->points_requested)
     {
+        geometry_msgs::msg::PointStamped transformed_point = point;
+        try
+        {
+            _buffer_tf2->transform(point, transformed_point, "camera_link");
+        }
+        catch (tf2::TransformException &ex) 
+        {
+            ROS_WARN("%s",ex.what());
+        }
+        
         //std::cout << pixel << std::endl;
     }
 }
