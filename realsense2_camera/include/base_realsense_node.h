@@ -37,6 +37,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <realsense2_camera_srvs/srv/coordinate_req.hpp>
+#include <realsense2_camera_srvs/srv/pixel_req.hpp>
 #include <realsense2_camera_srvs/srv/version_req.hpp>
 
 #include <tf2/LinearMath/Quaternion.h>
@@ -361,13 +362,16 @@ namespace realsense2_camera
         //coordinate service
         rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
         bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
-        void setupServices();
         std::atomic<double> _cam_pitch;
         //DO NOT WRITE THIS VARIABLE, ONLY READ OPERATIONS ARE ALLOWED
         std::atomic<rs2::vertex*> _vertex;
+        //version service:
         rclcpp::Service<realsense2_camera_srvs::srv::VersionReq>::SharedPtr _get_version_srv;
         bool get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res);
-        //version service:
+        //pixel service
+        rclcpp::Service<realsense2_camera_srvs::srv::PixelReq>::SharedPtr _get_pixel_srv;
+        bool get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res);
+        void setupServices();
 
 
     };//end class
