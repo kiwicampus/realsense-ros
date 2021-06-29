@@ -396,8 +396,10 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
                 // an Eigen vector is created to easily apply spatial transforms, however the coords are published in the camera frame for now
                 Eigen::Vector3f v(point_requested_coords.x, point_requested_coords.y, point_requested_coords.z);
                 Eigen::Matrix3f m;
+                Eigen::Translation<float,3> t;
                 m = Eigen::AngleAxisf(-M_PI_2, Eigen::Vector3f::UnitZ())*Eigen::AngleAxisf((-90.0 -_cam_pitch)*M_PI/180, Eigen::Vector3f::UnitX());
-                v = m*v;
+                t = Eigen::Translation<float,3>(_camera_link_x, _camera_link_y, _camera_link_z);
+                v = t*m*v;
                 point_requested_coords.x = v[0]; point_requested_coords.y = v[1]; point_requested_coords.z = v[2];
             }
         }
@@ -415,27 +417,35 @@ bool BaseRealSenseNode::get_version_cb(realsense2_camera_srvs::srv::VersionReq::
 
 bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res)
 {
-    std::cout << "received pixel request";
     auto msg_camera_info = _camera_info[COLOR]; 
     std::vector<geometry_msgs::msg::Point> pixels;
     pixels.reserve(req->points_requested.size());
     for(auto point: req->points_requested)
-    {
-        geometry_msgs::msg::PointStamped transformed_point = point;
+    { 
+        auto transformed_point = point;
         geometry_msgs::msg::Point pixel;
-        try
+        if(abs(point.point.x) + abs(point.point.y) + abs(point.point.z) > 0.1)
         {
-            _buffer_tf2->transform(point, transformed_point, "camera_link");
-        }
-        catch (tf2::TransformException &ex) 
+             try
+            {
+                _buffer_tf2->transform(point, transformed_point, "camera_color_optical_frame");
+            }
+            catch (tf2::TransformException &ex) 
+            {
+                ROS_WARN("%s",ex.what());
+            }
+            std::cout << transformed_point.point.x << " " << transformed_point.point.y << " " << transformed_point.point.z << std::endl;
+            pixel.x = (msg_camera_info.k[0]*transformed_point.point.x)/transformed_point.point.z + msg_camera_info.k[2]; 
+            pixel.y = (msg_camera_info.k[4]*transformed_point.point.y)/transformed_point.point.z + msg_camera_info.k[5]; 
+            pixel.z = 0.0f;
+            }
+        else
         {
-            ROS_WARN("%s",ex.what());
+            pixel.x = 0.0f; 
+            pixel.y = 0.0f;
+            pixel.z = 0.0f;
         }
-        pixel.x = (msg_camera_info.K[0]*transformed_point.point.x)/transformed_point.point.x + msg_camera_info.K[2]; 
-        pixel.y = (msg_camera_info.K[4]*transformed_point.point.x)/transformed_point.point.x + msg_camera_info.K[5]; 
-        pixel.z = 0.0f;
-        pixels.emplace_back(pixel)
-        //std::cout << pixel << std::endl;
+        pixels.emplace_back(pixel);
     }
     res->pixels = pixels;
     return true;

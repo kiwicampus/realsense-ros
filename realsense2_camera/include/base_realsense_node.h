@@ -33,6 +33,7 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_srvs/srv/set_bool.hpp>
@@ -45,6 +46,8 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include "tf2_ros/message_filter.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include <eigen3/Eigen/Geometry>
 #include <condition_variable>
 
