@@ -376,7 +376,8 @@ void BaseRealSenseNode::setupServices(){
 bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
     std::vector<geometry_msgs::msg::Point> _pixel_requested = req->pixel_requested;
     bool on_camera_frame = req->on_camera_frame;
-    std::vector<geometry_msgs::msg::Point> _pixel_requested_coords; 
+    std::vector<geometry_msgs::msg::Point> _pixel_requested_coords;
+    _pixel_requested_coords.reserve(req->pixel_requested.size());
     for(size_t i = 0; i < _pixel_requested.size(); i++){
         geometry_msgs::msg::Point point_requested = _pixel_requested[i];
         geometry_msgs::msg::Point point_requested_coords;
@@ -415,9 +416,13 @@ bool BaseRealSenseNode::get_version_cb(realsense2_camera_srvs::srv::VersionReq::
 bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res)
 {
     std::cout << "received pixel request";
+    auto msg_camera_info = _camera_info[COLOR]; 
+    std::vector<geometry_msgs::msg::Point> pixels;
+    pixels.reserve(req->points_requested.size());
     for(auto point: req->points_requested)
     {
         geometry_msgs::msg::PointStamped transformed_point = point;
+        geometry_msgs::msg::Point pixel;
         try
         {
             _buffer_tf2->transform(point, transformed_point, "camera_link");
@@ -426,9 +431,14 @@ bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Requ
         {
             ROS_WARN("%s",ex.what());
         }
-        
+        pixel.x = (msg_camera_info.K[0]*transformed_point.point.x)/transformed_point.point.x + msg_camera_info.K[2]; 
+        pixel.y = (msg_camera_info.K[4]*transformed_point.point.x)/transformed_point.point.x + msg_camera_info.K[5]; 
+        pixel.z = 0.0f;
+        pixels.emplace_back(pixel)
         //std::cout << pixel << std::endl;
     }
+    res->pixels = pixels;
+    return true;
 }
 
 void BaseRealSenseNode::runFirstFrameInitialization(rs2_stream stream_type)
