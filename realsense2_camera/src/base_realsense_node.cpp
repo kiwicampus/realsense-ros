@@ -349,6 +349,7 @@ void BaseRealSenseNode::publishTopics()
 
 void BaseRealSenseNode::setupServices(){
     // create a service named /camera/get_coords
+    _cam_pitch = atof(getenv("STEREO_ANGLE"));
     _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
             "get_coords",
             std::bind(
@@ -363,7 +364,6 @@ void BaseRealSenseNode::setupServices(){
                 this,
                 std::placeholders::_1,
                 std::placeholders::_2));
-    _cam_pitch = atof(getenv("STEREO_ANGLE"));
     _get_pixel_srv = _node.create_service<realsense2_camera_srvs::srv::PixelReq>(
         "get_pixel",
         std::bind(
@@ -375,33 +375,40 @@ void BaseRealSenseNode::setupServices(){
 
 bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
     std::vector<geometry_msgs::msg::Point> _pixel_requested = req->pixel_requested;
-    bool on_camera_frame = req->on_camera_frame;
     std::vector<geometry_msgs::msg::Point> _pixel_requested_coords;
     _pixel_requested_coords.reserve(req->pixel_requested.size());
-    for(size_t i = 0; i < _pixel_requested.size(); i++){
-        geometry_msgs::msg::Point point_requested = _pixel_requested[i];
-        geometry_msgs::msg::Point point_requested_coords;
+    for(auto point_requested: _pixel_requested){
+        geometry_msgs::msg::PointStamped point_requested_coords;
+        point_requested_coords.header.stamp = _node.now();
+        point_requested_coords.header.frame_id = "camera_color_optical_frame";
         if(_node.now() - _msg_pointcloud.header.stamp > rclcpp::Duration(3, 0)){
-            point_requested_coords.x = -1.0f;
-            point_requested_coords.y = -1.0f; 
-            point_requested_coords.z = -1.0f;
+            point_requested_coords.point.x = -1.0f;
+            point_requested_coords.point.y = -1.0f; 
+            point_requested_coords.point.z = -1.0f;
             ROS_WARN("Warning: Pointcloud not beeing generated");
         }else{
             size_t pixel_idx_requested = trunc(point_requested.y)*_msg_pointcloud.width +  trunc(point_requested.x);  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
             // WARNING!!! DO NOT CHANGE THE VALUE OF _vertex 
-            point_requested_coords.x = (_vertex+pixel_idx_requested)->x;
-            point_requested_coords.y = (_vertex+pixel_idx_requested)->y; 
-            point_requested_coords.z = (_vertex+pixel_idx_requested)->z;
-            if(!on_camera_frame){
-                // an Eigen vector is created to easily apply spatial transforms, however the coords are published in the camera frame for now
-                Eigen::Vector3f v(point_requested_coords.x, point_requested_coords.y, point_requested_coords.z);
-                Eigen::Matrix3f m;
-                m = Eigen::AngleAxisf(-M_PI_2, Eigen::Vector3f::UnitZ())*Eigen::AngleAxisf((-90.0 -_cam_pitch)*M_PI/180, Eigen::Vector3f::UnitX());
-                v = m*v;
-                point_requested_coords.x = v[0]; point_requested_coords.y = v[1]; point_requested_coords.z = v[2];
+            point_requested_coords.point.x = (_vertex+pixel_idx_requested)->x;
+            point_requested_coords.point.y = (_vertex+pixel_idx_requested)->y; 
+            point_requested_coords.point.z = (_vertex+pixel_idx_requested)->z;
+            try{
+                _buffer_tf2->transform(point_requested_coords, point_requested_coords, req->frame, tf2::durationFromSec(0.5));
             }
+            catch (tf2::TransformException &ex)
+            {
+                ROS_ERROR("%s",ex.what());
+            }
+            // if(!on_camera_frame){
+            //     // an Eigen vector is created to easily apply spatial transforms, however the coords are published in the camera frame for now
+            //     Eigen::Vector3f v(point_requested_coords.x, point_requested_coords.y, point_requested_coords.z);
+            //     Eigen::Matrix3f m;
+            //     m = Eigen::AngleAxisf(-M_PI_2, Eigen::Vector3f::UnitZ())*Eigen::AngleAxisf((-90.0 -_cam_pitch)*M_PI/180, Eigen::Vector3f::UnitX());
+            //     v = m*v;
+            //     point_requested_coords.x = v[0]; point_requested_coords.y = v[1]; point_requested_coords.z = v[2];
+            // }
         }
-        _pixel_requested_coords.push_back(point_requested_coords);       
+        _pixel_requested_coords.push_back(point_requested_coords.point);       
     }
     res -> xyz_coordinate = _pixel_requested_coords;
     return true;
@@ -409,6 +416,7 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
 }
 
 bool BaseRealSenseNode::get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res){
+    (void) req;
     res->version=_dev.get_info(RS2_CAMERA_INFO_FIRMWARE_VERSION);
     return true;
 }
@@ -424,7 +432,7 @@ bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Requ
         geometry_msgs::msg::Point pixel;
         try
         {
-            _buffer_tf2->transform(point, transformed_point, "camera_color_optical_frame");
+            _buffer_tf2->transform(point, transformed_point, "camera_color_optical_frame", tf2::durationFromSec(0.5));
         }
         catch (tf2::TransformException &ex) 
         {
