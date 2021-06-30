@@ -142,6 +142,10 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
 
     _monitor_options = {RS2_OPTION_ASIC_TEMPERATURE, RS2_OPTION_PROJECTOR_TEMPERATURE};
 
+    // kiwi added
+    _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock());
+    _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2);
+
     try
     {
         publishTopics();
@@ -346,26 +350,34 @@ void BaseRealSenseNode::publishTopics()
 void BaseRealSenseNode::setupServices(){
     // create a service named /camera/get_coords
     _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
-              "get_coords",
-              std::bind(
+            "get_coords",
+            std::bind(
                 &BaseRealSenseNode::get_coords_cb,
                 this,
                 std::placeholders::_1,
                 std::placeholders::_2));
     _get_version_srv = _node.create_service<realsense2_camera_srvs::srv::VersionReq>(
-              "get_version",
-              std::bind(
+            "get_version",
+            std::bind(
                 &BaseRealSenseNode::get_version_cb,
                 this,
                 std::placeholders::_1,
                 std::placeholders::_2));
     _cam_pitch = atof(getenv("STEREO_ANGLE"));
+    _get_pixel_srv = _node.create_service<realsense2_camera_srvs::srv::PixelReq>(
+        "get_pixel",
+        std::bind(
+                &BaseRealSenseNode::get_pixel_cb,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
 }
 
 bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
     std::vector<geometry_msgs::msg::Point> _pixel_requested = req->pixel_requested;
     bool on_camera_frame = req->on_camera_frame;
-    std::vector<geometry_msgs::msg::Point> _pixel_requested_coords; 
+    std::vector<geometry_msgs::msg::Point> _pixel_requested_coords;
+    _pixel_requested_coords.reserve(req->pixel_requested.size());
     for(size_t i = 0; i < _pixel_requested.size(); i++){
         geometry_msgs::msg::Point point_requested = _pixel_requested[i];
         geometry_msgs::msg::Point point_requested_coords;
@@ -398,6 +410,43 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
 
 bool BaseRealSenseNode::get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res){
     res->version=_dev.get_info(RS2_CAMERA_INFO_FIRMWARE_VERSION);
+    return true;
+}
+
+bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res)
+{
+    auto msg_camera_info = _camera_info[COLOR]; 
+    std::vector<geometry_msgs::msg::Point> pixels;
+    pixels.reserve(req->points_requested.size());
+    for(auto point: req->points_requested)
+    { 
+        auto transformed_point = point;
+        geometry_msgs::msg::Point pixel;
+        try
+        {
+            _buffer_tf2->transform(point, transformed_point, "camera_color_optical_frame");
+        }
+        catch (tf2::TransformException &ex) 
+        {
+            ROS_ERROR("%s",ex.what());
+        }
+        if(transformed_point.point.z > 0.0f)
+        {
+            // std::cout << transformed_point.point.x << " " << transformed_point.point.y << " " << transformed_point.point.z << std::endl;
+            pixel.x = (msg_camera_info.k[0]*transformed_point.point.x)/transformed_point.point.z + msg_camera_info.k[2]; 
+            pixel.y = (msg_camera_info.k[4]*transformed_point.point.y)/transformed_point.point.z + msg_camera_info.k[5]; 
+            pixel.z = 0.0f;
+            }
+        else
+        {
+            pixel.x = 0.0f; 
+            pixel.y = 0.0f;
+            pixel.z = 0.0f;
+        }
+        pixels.emplace_back(pixel);
+    }
+    // std::cout << "responded\n";
+    res->pixels = pixels;
     return true;
 }
 

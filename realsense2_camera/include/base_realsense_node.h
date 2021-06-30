@@ -33,15 +33,21 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <realsense2_camera_srvs/srv/coordinate_req.hpp>
+#include <realsense2_camera_srvs/srv/pixel_req.hpp>
 #include <realsense2_camera_srvs/srv/version_req.hpp>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include "tf2_ros/message_filter.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include <eigen3/Eigen/Geometry>
 #include <condition_variable>
 
@@ -361,13 +367,18 @@ namespace realsense2_camera
         //coordinate service
         rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
         bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
-        void setupServices();
         std::atomic<double> _cam_pitch;
         //DO NOT WRITE THIS VARIABLE, ONLY READ OPERATIONS ARE ALLOWED
         std::atomic<rs2::vertex*> _vertex;
+        //version service:
         rclcpp::Service<realsense2_camera_srvs::srv::VersionReq>::SharedPtr _get_version_srv;
         bool get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res);
-        //version service:
+        //pixel service
+        rclcpp::Service<realsense2_camera_srvs::srv::PixelReq>::SharedPtr _get_pixel_srv;
+        bool get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res);
+        std::unique_ptr<tf2_ros::Buffer> _buffer_tf2;
+        std::shared_ptr<tf2_ros::TransformListener> _listener_tf2;
+        void setupServices();
 
 
     };//end class

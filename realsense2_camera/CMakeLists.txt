@@ -98,6 +98,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(realsense2_camera_srvs REQUIRED)
 
 find_package(realsense2 2.45.0)
@@ -168,6 +169,7 @@ set(dependencies
   tf2
   realsense2
   tf2_ros
+  tf2_geometry_msgs
   realsense2_camera_srvs 
 )
 
@@ -219,6 +221,7 @@ if(BUILD_TESTING)
     OpenCV
     rclcpp
     sensor_msgs
+    geometry_msgs
     nav_msgs
     tf2
     tf2_ros)
