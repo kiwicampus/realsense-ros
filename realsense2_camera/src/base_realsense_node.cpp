@@ -399,14 +399,6 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
             {
                 ROS_ERROR("%s",ex.what());
             }
-            // if(!on_camera_frame){
-            //     // an Eigen vector is created to easily apply spatial transforms, however the coords are published in the camera frame for now
-            //     Eigen::Vector3f v(point_requested_coords.x, point_requested_coords.y, point_requested_coords.z);
-            //     Eigen::Matrix3f m;
-            //     m = Eigen::AngleAxisf(-M_PI_2, Eigen::Vector3f::UnitZ())*Eigen::AngleAxisf((-90.0 -_cam_pitch)*M_PI/180, Eigen::Vector3f::UnitX());
-            //     v = m*v;
-            //     point_requested_coords.x = v[0]; point_requested_coords.y = v[1]; point_requested_coords.z = v[2];
-            // }
         }
         _pixel_requested_coords.push_back(point_requested_coords.point);       
     }
