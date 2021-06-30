@@ -427,7 +427,7 @@ bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Requ
         geometry_msgs::msg::Point pixel;
         try
         {
-            _buffer_tf2->transform(point, transformed_point, "camera_color_optical_frame", tf2::durationFromSec(0.5));
+            _buffer_tf2->transform(point, transformed_point, "camera_color_optical_frame", tf2::durationFromSec(0.1));
         }
         catch (tf2::TransformException &ex) 
         {
