@@ -393,11 +393,14 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
             point_requested_coords.point.y = (_vertex+pixel_idx_requested)->y; 
             point_requested_coords.point.z = (_vertex+pixel_idx_requested)->z;
             try{
-                _buffer_tf2->transform(point_requested_coords, point_requested_coords, req->frame, tf2::durationFromSec(0.5));
+                point_requested_coords = _buffer_tf2->transform(point_requested_coords, req->frame, tf2::durationFromSec(0.1));
             }
             catch (tf2::TransformException &ex)
             {
                 ROS_ERROR("%s",ex.what());
+                point_requested_coords.point.x = -1.0f;
+                point_requested_coords.point.y = -1.0f; 
+                point_requested_coords.point.z = -1.0f;
             }
         }
         _pixel_requested_coords.push_back(point_requested_coords.point);       
