@@ -148,6 +148,9 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
 
     try
     {
+        // KIWI: subscriber for shuting down node before something going wrong
+        _shutdown_subscriber = _node.create_subscription<std_msgs::msg::Empty>("shutdown", 1, 
+                                    std::bind(&BaseRealSenseNode::shutdown_callback, this, std::placeholders::_1));
         publishTopics();
         _toggle_sensors_srv = _node.create_service<std_srvs::srv::SetBool>(
               "enable",
@@ -156,15 +159,12 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
                 this,
                 std::placeholders::_1,
                 std::placeholders::_2));
+
         // Kiwi added virtual cam
         if (_color_virtual_cam >= 0 ){
             _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
             _width[COLOR], _height[COLOR]);
         }
-        // Subscriber for shuting down node
-        _shutdown_subscriber = _node.create_subscription<std_msgs::msg::Empty>("shutdown", 1, 
-                                    std::bind(&BaseRealSenseNode::shutdown_callback, this, std::placeholders::_1));
-        
     }
     catch(const std::exception& e)
     {
