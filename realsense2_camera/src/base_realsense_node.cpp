@@ -349,7 +349,7 @@ void BaseRealSenseNode::publishTopics()
 
 void BaseRealSenseNode::setupServices(){
     // create a service named /camera/get_coords
-    _cam_pitch = atof(getenv("STEREO_ANGLE"));
+    _cam_pitch = atof(getenv("STEREO_ANGLE"))/57.2958; // convert to rads
     _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
             "get_coords",
             std::bind(
@@ -2295,8 +2295,25 @@ void BaseRealSenseNode::publishStaticTransforms()
             {
                 publishDynamicTransforms();
             });
-        else
+        else{
+            if (_enable[GYRO] && _enable[ACCEL]){ // if enabled calculate pitch based on that later
+                // _chassis_transform_tmr = _node.create_wall_timer(std::chrono::milliseconds(1000),
+                //                                  std::bind(&BaseRealSenseNode::ChassisTransformTmrCb, this));
+            }
+            else{ // add to static transform msgs transform based on env variable
+                ROS_INFO_STREAM_ONCE("Using Env var STEREO_ANGLE, pitch (degree): " << _cam_pitch*57.2958);
+                rclcpp::Time transform_ts_ = _node.now();
+
+                // Our physical installation of realsense. 
+                float3 trans{-_camera_link_y, -_camera_link_z, _camera_link_x}; // See publish_static_tf why this order
+                tf2::Quaternion quat;
+                quat.setRPY(0, _cam_pitch, 0);
+
+                // this method adds a static transform to '_static_tf_msgs'
+                publish_static_tf(transform_ts_, trans, quat, _robot_base_frame, "camera_link");
+            }
             _static_tf_broadcaster.sendTransform(_static_tf_msgs);
+        }
     }
 
     // Publish Extrinsics Topics:
@@ -2339,8 +2356,35 @@ void BaseRealSenseNode::publishStaticTransforms()
 
 }
 
+void BaseRealSenseNode::ChassisTransformTmrCb(){
+    if (_imu_accel_initiated){
+        rclcpp::Time t = _node.now();
+        publishChassisTransform(t, false);
+        // Cancel timer because we are not publishing it anymore
+        _chassis_transform_tmr->cancel();
+    }
+}
+
+// Get camera pitch inclination Quaternion from imu accel measurements. Accelerations are in imu frame
+tf2::Quaternion BaseRealSenseNode::getInclinationQuat(double accel_x, double accel_y, double accel_z){
+    tf2::Quaternion quat;
+
+    // Calculate pitch with imu accel data
+    // With respect to our robot 4.0, raw data: y is looking up, z forward and x to the left.
+    double x_Buff = accel_z;  // corresponding to /camera/imu z
+    double y_Buff = accel_x;  // corresponding to /camera/imu x
+    double z_Buff = accel_y;  // corresponding to /camera/imu y
+
+    double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
+    _cam_pitch = pitch;
+    ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch*57.2958);
+    quat.setRPY(0, pitch, 0);
+
+    return quat;
+}
+
 // Kiwi added transform for chassis and stereo position
-void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t)
+void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t, bool dynamic_transform)
 {
     // ros2 run tf2_ros static_transform_publisher 0.21 -0.041 0.404 0 0.15708 0 chassis camera_link
     geometry_msgs::msg::TransformStamped broadcaster_msg;
@@ -2350,19 +2394,8 @@ void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t)
     broadcaster_msg.transform.translation.y = _camera_link_y;
     broadcaster_msg.transform.translation.z = _camera_link_z;
 
-    tf2::Quaternion quat;
-    // Calculate pitch with imu accel data
-    // With respect to our robot 4.0, raw data: y is looking up, z forward and x to the left.
-    double x_Buff = _imu_accel_z;  // corresponding to /camera/imu z
-    double y_Buff = _imu_accel_x;  // corresponding to /camera/imu x
-    double z_Buff = _imu_accel_y;  // corresponding to /camera/imu y
+    tf2::Quaternion quat = getInclinationQuat(_imu_accel_x, _imu_accel_y, _imu_accel_z);
 
-    double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
-    _cam_pitch = pitch;
-    ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch*57.2958);
-    quat.setRPY(0, pitch, 0);
-
-    // for orientation we use local odom since it starts aligned with chassis, global is pointing north
     broadcaster_msg.transform.rotation.x = quat[0];
     broadcaster_msg.transform.rotation.y = quat[1];
     broadcaster_msg.transform.rotation.z = quat[2];
@@ -2370,7 +2403,11 @@ void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t)
     broadcaster_msg.header.stamp = t;
     broadcaster_msg.header.frame_id = _robot_base_frame;
     broadcaster_msg.child_frame_id = "camera_link";
-    _dynamic_tf_broadcaster.sendTransform(broadcaster_msg);
+
+    if (dynamic_transform)
+        _dynamic_tf_broadcaster.sendTransform(broadcaster_msg);
+    else
+        _static_tf_broadcaster.sendTransform(broadcaster_msg);
 }
 
 void BaseRealSenseNode::publishDynamicTransforms()
@@ -2390,7 +2427,7 @@ void BaseRealSenseNode::publishDynamicTransforms()
 
             // Kiwi: add here pitch calculation from accelerometer to add transform to chassis
             if (_imu_accel_initiated)
-                publishChassisTransform(t);
+                publishChassisTransform(t, true);
 
             _dynamic_tf_broadcaster.sendTransform(_static_tf_msgs);
         }
