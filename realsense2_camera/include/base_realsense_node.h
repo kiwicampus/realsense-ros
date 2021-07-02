@@ -14,6 +14,7 @@
 #include "constants.h"
 #include "dynamic_params.h"
 #include <cv_bridge/cv_bridge.h>
+#include <numeric>
 
 // #include <nav_msgs/Odometry.h>
 #if defined(DASHING) || defined(ELOQUENT)
@@ -355,11 +356,11 @@ namespace realsense2_camera
         float _camera_link_y;
         float _camera_link_z;
         // Imu accel vars
-        double _imu_accel_x = 0.0;
-        double _imu_accel_y = 0.0;
-        double _imu_accel_z = 0.0;
+        std::vector<double> _imu_accel_x_vector;
+        std::vector<double> _imu_accel_y_vector;
+        std::vector<double> _imu_accel_z_vector;
         bool _imu_accel_initiated = false;
-        void publishChassisTransform(rclcpp::Time t);
+        void publishChassisTransform(rclcpp::Time t, bool dynamic_transform);
         // Subscriber for shutting down
         rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr _shutdown_subscriber;
         void shutdown_callback(const std_msgs::msg::Empty::SharedPtr msg);
@@ -379,6 +380,11 @@ namespace realsense2_camera
         std::unique_ptr<tf2_ros::Buffer> _buffer_tf2;
         std::shared_ptr<tf2_ros::TransformListener> _listener_tf2;
         void setupServices();
+
+        // Chassis transform timer for waiting pitch calculation
+        rclcpp::TimerBase::SharedPtr _chassis_transform_tmr;
+        tf2::Quaternion getInclinationQuat();
+        void ChassisTransformTmrCb();
 
 
     };//end class
