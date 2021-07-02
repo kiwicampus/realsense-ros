@@ -17,6 +17,17 @@ using namespace realsense2_camera;
 #define ALIGNED_DEPTH_TO_FRAME_ID(sip) (static_cast<std::ostringstream&&>(std::ostringstream() << "camera_aligned_depth_to_" << STREAM_NAME(sip) << "_frame")).str()
 
 
+double getEnv(const char* var, double default_var)
+{
+    try
+    {
+        return std::stof(getenv(var));
+    } catch (const std::exception& e)
+    {
+        return default_var;
+    }
+}
+
 std::vector<std::string> split(const std::string& s, char delimiter) // Thanks to Jonathan Boccara (https://www.fluentcpp.com/2017/04/21/how-to-split-a-string-in-c/)
 {
    std::vector<std::string> tokens;
@@ -349,7 +360,7 @@ void BaseRealSenseNode::publishTopics()
 
 void BaseRealSenseNode::setupServices(){
     // create a service named /camera/get_coords
-    _cam_pitch = atof(getenv("STEREO_ANGLE"))/57.2958; // convert to rads
+    _cam_pitch = getEnv("STEREO_ANGLE", 15.0)/57.2958; // convert to rads
     _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
             "get_coords",
             std::bind(
@@ -1715,10 +1726,12 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
             ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
 
             // kiwi Added to calculate first accel measurements
-            _imu_accel_x = imu_msg.linear_acceleration.x;
-            _imu_accel_y = imu_msg.linear_acceleration.y;
-            _imu_accel_z = imu_msg.linear_acceleration.z;
-            _imu_accel_initiated = true;
+            _imu_accel_x_vector.push_back(imu_msg.linear_acceleration.x);
+            _imu_accel_y_vector.push_back(imu_msg.linear_acceleration.y);
+            _imu_accel_z_vector.push_back(imu_msg.linear_acceleration.z);
+
+            if (_imu_accel_x_vector.size() > 30 )
+                _imu_accel_initiated = true;
 
             imu_msgs.pop_front();
         }
@@ -2364,11 +2377,17 @@ void BaseRealSenseNode::ChassisTransformTmrCb(){
         // Cancel timer because we are not publishing it anymore
         _chassis_transform_tmr->cancel();
     }
+    else
+        ROS_WARN_STREAM("Not accel info yet, trying again later");
 }
 
 // Get camera pitch inclination Quaternion from imu accel measurements. Accelerations are in imu frame
-tf2::Quaternion BaseRealSenseNode::getInclinationQuat(double accel_x, double accel_y, double accel_z){
+tf2::Quaternion BaseRealSenseNode::getInclinationQuat(){
     tf2::Quaternion quat;
+
+    double accel_x = std::accumulate( _imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0) / _imu_accel_x_vector.size();
+    double accel_y = std::accumulate( _imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0) / _imu_accel_y_vector.size();
+    double accel_z = std::accumulate( _imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0) / _imu_accel_z_vector.size();
 
     // Calculate pitch with imu accel data
     // With respect to our robot 4.0, raw data: y is looking up, z forward and x to the left.
@@ -2395,7 +2414,7 @@ void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t, bool dynamic_tra
     broadcaster_msg.transform.translation.y = _camera_link_y;
     broadcaster_msg.transform.translation.z = _camera_link_z;
 
-    tf2::Quaternion quat = getInclinationQuat(_imu_accel_x, _imu_accel_y, _imu_accel_z);
+    tf2::Quaternion quat = getInclinationQuat();
 
     broadcaster_msg.transform.rotation.x = quat[0];
     broadcaster_msg.transform.rotation.y = quat[1];
