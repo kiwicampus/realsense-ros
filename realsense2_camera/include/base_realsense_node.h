@@ -360,7 +360,7 @@ namespace realsense2_camera
         std::vector<double> _imu_accel_y_vector;
         std::vector<double> _imu_accel_z_vector;
         bool _imu_accel_initiated = false;
-        void publishChassisTransform(rclcpp::Time t, bool dynamic_transform);
+        void publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch);
         // Subscriber for shutting down
         rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr _shutdown_subscriber;
         void shutdown_callback(const std_msgs::msg::Empty::SharedPtr msg);
@@ -384,6 +384,8 @@ namespace realsense2_camera
         // Chassis transform timer for waiting pitch calculation
         rclcpp::TimerBase::SharedPtr _chassis_transform_tmr;
         tf2::Quaternion getInclinationQuat();
+        tf2::Quaternion getInclinationQuat(double pitch);
+        double getImuPitch();
         void ChassisTransformTmrCb();
 
 
