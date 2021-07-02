@@ -2315,15 +2315,9 @@ void BaseRealSenseNode::publishStaticTransforms()
             }
             else{ // add to static transform msgs transform based on env variable
                 ROS_INFO_STREAM_ONCE("Using Env var STEREO_ANGLE, pitch (degree): " << _cam_pitch*57.2958);
-                rclcpp::Time transform_ts_ = _node.now();
-
-                // Our physical installation of realsense. 
-                float3 trans{-_camera_link_y, -_camera_link_z, _camera_link_x}; // See publish_static_tf why this order
-                tf2::Quaternion quat;
-                quat.setRPY(0, _cam_pitch, 0);
-
-                // this method adds a static transform to '_static_tf_msgs'
-                publish_static_tf(transform_ts_, trans, quat, _robot_base_frame, "camera_link");
+                rclcpp::Time t = _node.now();
+                // Publish as static, and don't use imu readings
+                publishChassisTransform(t, false, false);
             }
             _static_tf_broadcaster.sendTransform(_static_tf_msgs);
         }
@@ -2373,7 +2367,7 @@ void BaseRealSenseNode::ChassisTransformTmrCb(){
     ROS_INFO_STREAM("Checking if chassis transform can be published");
     if (_imu_accel_initiated){
         rclcpp::Time t = _node.now();
-        publishChassisTransform(t, false);
+        publishChassisTransform(t, false, true);
         // Cancel timer because we are not publishing it anymore
         _chassis_transform_tmr->cancel();
     }
@@ -2381,10 +2375,8 @@ void BaseRealSenseNode::ChassisTransformTmrCb(){
         ROS_WARN_STREAM("Not accel info yet, trying again later");
 }
 
-// Get camera pitch inclination Quaternion from imu accel measurements. Accelerations are in imu frame
-tf2::Quaternion BaseRealSenseNode::getInclinationQuat(){
-    tf2::Quaternion quat;
-
+// Get pitch based on imu accel readings. Accelerations are in imu frame
+double BaseRealSenseNode::getImuPitch(){
     double accel_x = std::accumulate( _imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0) / _imu_accel_x_vector.size();
     double accel_y = std::accumulate( _imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0) / _imu_accel_y_vector.size();
     double accel_z = std::accumulate( _imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0) / _imu_accel_z_vector.size();
@@ -2396,15 +2388,26 @@ tf2::Quaternion BaseRealSenseNode::getInclinationQuat(){
     double z_Buff = accel_y;  // corresponding to /camera/imu y
 
     double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
-    _cam_pitch = pitch;
     ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch*57.2958);
-    quat.setRPY(0, pitch, 0);
+    return pitch;
+}
 
+// Get camera pitch inclination Quaternion from imu accel measurements. 
+tf2::Quaternion BaseRealSenseNode::getInclinationQuat(){
+    tf2::Quaternion quat;
+    _cam_pitch = getImuPitch();
+    quat.setRPY(0, _cam_pitch, 0);
+    return quat;
+}
+// Get camera pitch inclination Quaternion from a pitch angle in rads.
+tf2::Quaternion BaseRealSenseNode::getInclinationQuat(double pitch){
+    tf2::Quaternion quat;
+    quat.setRPY(0, pitch, 0);
     return quat;
 }
 
-// Kiwi added transform for chassis and stereo position
-void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t, bool dynamic_transform)
+// Kiwi added transform for chassis and stereo position, and optional calculated pitch from imu
+void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch)
 {
     // ros2 run tf2_ros static_transform_publisher 0.21 -0.041 0.404 0 0.15708 0 chassis camera_link
     geometry_msgs::msg::TransformStamped broadcaster_msg;
@@ -2414,7 +2417,11 @@ void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t, bool dynamic_tra
     broadcaster_msg.transform.translation.y = _camera_link_y;
     broadcaster_msg.transform.translation.z = _camera_link_z;
 
-    tf2::Quaternion quat = getInclinationQuat();
+    tf2::Quaternion quat;
+    if (use_imu_pitch)
+        quat = getInclinationQuat(); // this will override '_cam_pitch' property
+    else
+        quat = getInclinationQuat(_cam_pitch);
 
     broadcaster_msg.transform.rotation.x = quat[0];
     broadcaster_msg.transform.rotation.y = quat[1];
@@ -2429,6 +2436,7 @@ void BaseRealSenseNode::publishChassisTransform(rclcpp::Time t, bool dynamic_tra
     else
         _static_tf_broadcaster.sendTransform(broadcaster_msg);
 }
+
 
 void BaseRealSenseNode::publishDynamicTransforms()
 {
@@ -2447,7 +2455,12 @@ void BaseRealSenseNode::publishDynamicTransforms()
 
             // Kiwi: add here pitch calculation from accelerometer to add transform to chassis
             if (_imu_accel_initiated)
-                publishChassisTransform(t, true);
+                publishChassisTransform(t, true, true);
+            else
+                ROS_INFO_STREAM_ONCE("Using Env var STEREO_ANGLE for pitch, pitch (degree): " << _cam_pitch*57.2958);
+                // Don't use imu for pitch but env variable set.
+                publishChassisTransform(t, true, false);
+
 
             _dynamic_tf_broadcaster.sendTransform(_static_tf_msgs);
         }
