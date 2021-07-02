@@ -2297,8 +2297,8 @@ void BaseRealSenseNode::publishStaticTransforms()
             });
         else{
             if (_enable[GYRO] && _enable[ACCEL]){ // if enabled calculate pitch based on that later
-                // _chassis_transform_tmr = _node.create_wall_timer(std::chrono::milliseconds(1000),
-                //                                  std::bind(&BaseRealSenseNode::ChassisTransformTmrCb, this));
+                _chassis_transform_tmr = _node.create_wall_timer(std::chrono::milliseconds(1000),
+                                                 std::bind(&BaseRealSenseNode::ChassisTransformTmrCb, this));
             }
             else{ // add to static transform msgs transform based on env variable
                 ROS_INFO_STREAM_ONCE("Using Env var STEREO_ANGLE, pitch (degree): " << _cam_pitch*57.2958);
@@ -2357,6 +2357,7 @@ void BaseRealSenseNode::publishStaticTransforms()
 }
 
 void BaseRealSenseNode::ChassisTransformTmrCb(){
+    ROS_INFO_STREAM("Checking if chassis transform can be published");
     if (_imu_accel_initiated){
         rclcpp::Time t = _node.now();
         publishChassisTransform(t, false);
