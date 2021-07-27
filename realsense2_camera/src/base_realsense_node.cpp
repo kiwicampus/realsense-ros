@@ -165,9 +165,9 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     {
         app_name = "Dev4_x";
     }
-    if(app_name == "Dev4_x"){
-        _display_logs = true;
-        ROS_INFO_STREAM("Logs will be displayed");
+    if(app_name == "Staging4_x" || app_name == "Production4_x"){
+        _display_logs = false;
+        ROS_INFO_STREAM("Logs will not be displayed");
     }
 
     try
