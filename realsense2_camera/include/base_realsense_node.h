@@ -389,7 +389,7 @@ namespace realsense2_camera
         void ChassisTransformTmrCb();
 
         //Toxic logs removal
-        bool _display_logs=false;
+        bool _display_logs=true;
 
 
     };//end class
