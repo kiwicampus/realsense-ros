@@ -157,6 +157,19 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock());
     _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2);
 
+    std::string app_name;
+    try
+    {
+        app_name = std::string(getenv("BALENA_APP_NAME"));
+    } catch (const std::exception& e)
+    {
+        app_name = "Dev4_x";
+    }
+    if(app_name == "Dev4_x"){
+        _display_logs = true;
+        ROS_INFO_STREAM("Logs will be displayed");
+    }
+
     try
     {
         // KIWI: subscriber for shuting down node before something going wrong
@@ -2517,7 +2530,9 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
         {
             warn_count++;
             std::string texture_source_name = _pointcloud_filter->get_option_value_description(rs2_option::RS2_OPTION_STREAM_FILTER, static_cast<float>(texture_source_id));
-            ROS_WARN_STREAM_COND(warn_count == DISPLAY_WARN_NUMBER, "No stream match for pointcloud chosen texture " << texture_source_name);
+            if(_display_logs){
+                ROS_WARN_STREAM_COND(warn_count == DISPLAY_WARN_NUMBER, "No stream match for pointcloud chosen texture " << texture_source_name);
+            }
             return;
         }
         warn_count = 0;
