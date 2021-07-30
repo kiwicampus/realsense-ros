@@ -17,17 +17,16 @@ using namespace realsense2_camera;
 #define ALIGNED_DEPTH_TO_FRAME_ID(sip) (static_cast<std::ostringstream&&>(std::ostringstream() << "camera_aligned_depth_to_" << STREAM_NAME(sip) << "_frame")).str()
 
 
-double getEnv(const char* var, double default_var)
+bool getEnv(const char* var, bool default_var)
 {
     try
     {
-        return std::stof(getenv(var));
+        return std::string(getenv(var)).compare("1") == 0;
     } catch (const std::exception& e)
     {
         return default_var;
     }
 }
-
 std::vector<std::string> split(const std::string& s, char delimiter) // Thanks to Jonathan Boccara (https://www.fluentcpp.com/2017/04/21/how-to-split-a-string-in-c/)
 {
    std::vector<std::string> tokens;
@@ -157,18 +156,14 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock());
     _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2);
 
-    std::string app_name;
     try
     {
-        app_name = std::string(getenv("BALENA_APP_NAME"));
+        _display_logs = (getEnv("STEREO_TEXTURE_LOG", true));
     } catch (const std::exception& e)
     {
-        app_name = "Dev4_x";
+        _display_logs = true;
     }
-    if(app_name == "Staging4_x" || app_name == "Production4_x"){
-        _display_logs = false;
-        ROS_INFO_STREAM("Logs will not be displayed");
-    }
+    ROS_INFO_STREAM("Logs displaying: " << _display_logs);
 
     try
     {
