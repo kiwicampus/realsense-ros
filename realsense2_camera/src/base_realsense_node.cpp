@@ -17,6 +17,17 @@ using namespace realsense2_camera;
 #define ALIGNED_DEPTH_TO_FRAME_ID(sip) (static_cast<std::ostringstream&&>(std::ostringstream() << "camera_aligned_depth_to_" << STREAM_NAME(sip) << "_frame")).str()
 
 
+double getEnv(const char* var, double default_var)
+{
+    try
+    {
+        return std::stof(getenv(var));
+    } catch (const std::exception& e)
+    {
+        return default_var;
+    }
+}
+
 bool getEnv(const char* var, bool default_var)
 {
     try
@@ -27,6 +38,7 @@ bool getEnv(const char* var, bool default_var)
         return default_var;
     }
 }
+
 std::vector<std::string> split(const std::string& s, char delimiter) // Thanks to Jonathan Boccara (https://www.fluentcpp.com/2017/04/21/how-to-split-a-string-in-c/)
 {
    std::vector<std::string> tokens;
