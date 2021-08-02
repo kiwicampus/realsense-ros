@@ -175,7 +175,7 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     {
         _display_logs = true;
     }
-    ROS_INFO_STREAM("Logs displaying: " << _display_logs);
+    ROS_INFO_STREAM("Texture logs displaying: " << _display_logs);
 
     try
     {
