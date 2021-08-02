@@ -157,7 +157,6 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock());
     _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2);
 
-
     try
     {
         // KIWI: subscriber for shuting down node before something going wrong
@@ -1060,7 +1059,6 @@ void BaseRealSenseNode::getParameters()
     setNgetNodeParameter(_camera_link_z, "camera_link_z", CAMERA_LINK_Z);
 
     ROS_INFO_STREAM("Texture logs displaying: " << _texture_display_logs);
-    ROS_INFO_STREAM("Texture logs displaying: " << _camera_link_z);
 }
 
 void BaseRealSenseNode::setupDevice()
