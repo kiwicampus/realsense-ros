@@ -28,17 +28,6 @@ double getEnv(const char* var, double default_var)
     }
 }
 
-bool getEnv(const char* var, bool default_var)
-{
-    try
-    {
-        return std::string(getenv(var)).compare("1") == 0;
-    } catch (const std::exception& e)
-    {
-        return default_var;
-    }
-}
-
 std::vector<std::string> split(const std::string& s, char delimiter) // Thanks to Jonathan Boccara (https://www.fluentcpp.com/2017/04/21/how-to-split-a-string-in-c/)
 {
    std::vector<std::string> tokens;
@@ -168,14 +157,6 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock());
     _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2);
 
-    try
-    {
-        _display_logs = (getEnv("STEREO_TEXTURE_LOG", true));
-    } catch (const std::exception& e)
-    {
-        _display_logs = true;
-    }
-    ROS_INFO_STREAM("Texture logs displaying: " << _display_logs);
 
     try
     {
@@ -1072,10 +1053,14 @@ void BaseRealSenseNode::getParameters()
 
     // Kiwi added
     setNgetNodeParameter(_color_virtual_cam, "color_virtual_cam", COLOR_VIRTUAL_CAMERA);
+    setNgetNodeParameter(_texture_display_logs, "texture_display_logs", TEXTURE_DISPLAY_LOGS);
     setNgetNodeParameter(_robot_base_frame, "robot_base_frame", ROBOT_BASE_FRAME);
     setNgetNodeParameter(_camera_link_x, "camera_link_x", CAMERA_LINK_X);
     setNgetNodeParameter(_camera_link_y, "camera_link_y", CAMERA_LINK_Y);
     setNgetNodeParameter(_camera_link_z, "camera_link_z", CAMERA_LINK_Z);
+
+    ROS_INFO_STREAM("Texture logs displaying: " << _texture_display_logs);
+    ROS_INFO_STREAM("Texture logs displaying: " << _camera_link_z);
 }
 
 void BaseRealSenseNode::setupDevice()
@@ -2537,7 +2522,7 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
         {
             warn_count++;
             std::string texture_source_name = _pointcloud_filter->get_option_value_description(rs2_option::RS2_OPTION_STREAM_FILTER, static_cast<float>(texture_source_id));
-            if(_display_logs){
+            if(_texture_display_logs){
                 ROS_WARN_STREAM_COND(warn_count == DISPLAY_WARN_NUMBER, "No stream match for pointcloud chosen texture " << texture_source_name);
             }
             return;
