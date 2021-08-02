@@ -388,6 +388,9 @@ namespace realsense2_camera
         double getImuPitch();
         void ChassisTransformTmrCb();
 
+        //Toxic logs removal
+        int _texture_display_logs;
+
 
     };//end class
 }

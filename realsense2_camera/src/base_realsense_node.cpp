@@ -1052,10 +1052,13 @@ void BaseRealSenseNode::getParameters()
 
     // Kiwi added
     setNgetNodeParameter(_color_virtual_cam, "color_virtual_cam", COLOR_VIRTUAL_CAMERA);
+    setNgetNodeParameter(_texture_display_logs, "texture_display_logs", TEXTURE_DISPLAY_LOGS);
     setNgetNodeParameter(_robot_base_frame, "robot_base_frame", ROBOT_BASE_FRAME);
     setNgetNodeParameter(_camera_link_x, "camera_link_x", CAMERA_LINK_X);
     setNgetNodeParameter(_camera_link_y, "camera_link_y", CAMERA_LINK_Y);
     setNgetNodeParameter(_camera_link_z, "camera_link_z", CAMERA_LINK_Z);
+
+    ROS_INFO_STREAM("Texture logs displaying: " << _texture_display_logs);
 }
 
 void BaseRealSenseNode::setupDevice()
@@ -2517,7 +2520,9 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
         {
             warn_count++;
             std::string texture_source_name = _pointcloud_filter->get_option_value_description(rs2_option::RS2_OPTION_STREAM_FILTER, static_cast<float>(texture_source_id));
-            ROS_WARN_STREAM_COND(warn_count == DISPLAY_WARN_NUMBER, "No stream match for pointcloud chosen texture " << texture_source_name);
+            if(_texture_display_logs){
+                ROS_WARN_STREAM_COND(warn_count == DISPLAY_WARN_NUMBER, "No stream match for pointcloud chosen texture " << texture_source_name);
+            }
             return;
         }
         warn_count = 0;
