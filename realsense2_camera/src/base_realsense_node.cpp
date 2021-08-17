@@ -159,9 +159,9 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
 
     try
     {
-        // KIWI: subscriber for shuting down node before something going wrong
-        _shutdown_subscriber = _node.create_subscription<std_msgs::msg::Empty>("shutdown", 1, 
-                                    std::bind(&BaseRealSenseNode::shutdown_callback, this, std::placeholders::_1));
+        // KIWI: service for shuting down node before something going wrong
+        _shutdown_srv = _node.create_service<std_srvs::srv::Trigger>("shutdown",
+                        std::bind(&BaseRealSenseNode::shutdown_callback, this, std::placeholders::_1, std::placeholders::_2));
         publishTopics();
         _toggle_sensors_srv = _node.create_service<std_srvs::srv::SetBool>(
               "enable",
@@ -186,9 +186,11 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     
 }
 
-void BaseRealSenseNode::shutdown_callback(const std_msgs::msg::Empty::SharedPtr msg)
+void BaseRealSenseNode::shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res)
 {
-    (void)msg;
+    (void)req;
+    res->success = true;
+    res->message = "Stereo Node will be killed";
     RCLCPP_WARN(_node.get_logger(), "SHUTTING DOWN NODE");
     clean();
     rclcpp::shutdown(); 
