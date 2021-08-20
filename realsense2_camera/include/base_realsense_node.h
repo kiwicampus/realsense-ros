@@ -40,6 +40,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <realsense2_camera_srvs/srv/coordinate_req.hpp>
 #include <realsense2_camera_srvs/srv/pixel_req.hpp>
 #include <realsense2_camera_srvs/srv/version_req.hpp>
@@ -375,8 +376,8 @@ namespace realsense2_camera
         bool _imu_accel_initiated = false;
         void publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch);
         // Subscriber for shutting down
-        rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr _shutdown_subscriber;
-        void shutdown_callback(const std_msgs::msg::Empty::SharedPtr msg);
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _shutdown_srv;
+        void shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res);
 
         //coordinate service
         rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
