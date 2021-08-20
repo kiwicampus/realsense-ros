@@ -101,7 +101,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(realsense2_camera_srvs REQUIRED)
 
-find_package(realsense2 2.48.0)
+find_package(realsense2 2.45.0)
 if(NOT realsense2_FOUND)
     message(FATAL_ERROR "\n\n Intel RealSense SDK 2.0 is missing, please install it from https://github.com/IntelRealSense/librealsense/releases\n\n")
 endif()
@@ -111,7 +111,7 @@ include_directories(include)
 
 set(node_plugins "")
 
-set(SOURCES
+set(SOURCES 
     src/realsense_node_factory.cpp
     src/base_realsense_node.cpp
     src/t265_realsense_node.cpp
@@ -130,16 +130,12 @@ elseif("$ENV{ROS_DISTRO}" STREQUAL "eloquent")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DELOQUENT")
   set(SOURCES "${SOURCES}" src/ros_param_backend_foxy.cpp)
 elseif("$ENV{ROS_DISTRO}" STREQUAL "foxy")
-  message(STATUS "Build for ROS2 Foxy")
+  message(STATUS "Build for ROS2 foxy")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFOXY")
   set(SOURCES "${SOURCES}" src/ros_param_backend_foxy.cpp)
 elseif("$ENV{ROS_DISTRO}" STREQUAL "galactic")
-  message(STATUS "Build for ROS2 Galactic")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGALACTIC")
-  set(SOURCES "${SOURCES}" src/ros_param_backend_foxy.cpp)
-elseif("$ENV{ROS_DISTRO}" STREQUAL "rolling")
-  message(STATUS "Build for ROS2 Rolling")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROLLING")
+  message(STATUS "Build for ROS2 galactic")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFOXY")
   set(SOURCES "${SOURCES}" src/ros_param_backend_foxy.cpp)
 else()
   message(FATAL_ERROR "Unsupported ROS Distribution: " "$ENV{ROS_DISTRO}")
@@ -159,7 +155,7 @@ target_link_libraries(${PROJECT_NAME}
     ${realsense2_LIBRARY}
     )
 
-set(dependencies
+set(dependencies 
   cv_bridge
   image_transport
   rclcpp
@@ -200,10 +196,9 @@ install(
 )
 
 # Install launch files
-install(DIRECTORY
+install(DIRECTORY 
     launch
     config
-    rviz
     DESTINATION share/${PROJECT_NAME}
     )
 

@@ -1,4 +1,4 @@
-camera:
+camera1:
     camera:
       ros__parameters:
         device_type: ''
@@ -36,7 +36,7 @@ camera:
         pointcloud_texture_stream: RS2_STREAM_COLOR
 
         stereo_module:
-          emitter_enabled: 1
+          emitter_enabled: true
         unite_imu_method: ''
 
         rosbag_filename: ''
