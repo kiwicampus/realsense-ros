@@ -517,10 +517,10 @@ void BaseRealSenseNode::setupServices(){
 }
 
 bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
-    bool pc_warning_printed = false;
     std::vector<geometry_msgs::msg::Point> _pixel_requested = req->pixel_requested;
     std::vector<geometry_msgs::msg::Point> _pixel_requested_coords;
     _pixel_requested_coords.reserve(req->pixel_requested.size());
+    ROS_WARN_STREAM_COND(_node.now() - _msg_pointcloud.header.stamp > rclcpp::Duration(3, 0), "Warning: Pointcloud not beeing generated");
     for(auto point_requested: _pixel_requested){
         geometry_msgs::msg::PointStamped point_requested_coords;
         point_requested_coords.header.stamp = _node.now();
@@ -529,10 +529,6 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
             point_requested_coords.point.x = -1.0f;
             point_requested_coords.point.y = -1.0f; 
             point_requested_coords.point.z = -1.0f;
-            if(!pc_warning_printed){
-                pc_warning_printed = true;
-                ROS_WARN("Warning: Pointcloud not beeing generated");
-            }
         }else{
             size_t pixel_idx_requested = trunc(point_requested.y)*_msg_pointcloud.width +  trunc(point_requested.x);  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
             // WARNING!!! DO NOT CHANGE THE VALUE OF _vertex 
