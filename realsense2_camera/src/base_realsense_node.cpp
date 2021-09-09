@@ -520,12 +520,23 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
     std::vector<geometry_msgs::msg::Point> _pixel_requested = req->pixel_requested;
     std::vector<geometry_msgs::msg::Point> _pixel_requested_coords;
     _pixel_requested_coords.reserve(req->pixel_requested.size());
+    bool transform_available = true;
+    geometry_msgs::msg::TransformStamped transform;
+    try{
+        transform = _buffer_tf2->lookupTransform(req->frame, "camera_color_optical_frame", rclcpp::Time(0));
+    }
+    catch (tf2::TransformException &ex)
+    {
+        ROS_ERROR("%s",ex.what());
+        transform_available = false;
+    }
     ROS_WARN_STREAM_COND(_node.now() - _msg_pointcloud.header.stamp > rclcpp::Duration(3, 0), "Warning: Pointcloud not beeing generated");
+    ROS_WARN_STREAM_COND(!transform_available, "Warning: No transform available");
     for(auto point_requested: _pixel_requested){
         geometry_msgs::msg::PointStamped point_requested_coords;
         point_requested_coords.header.stamp = _node.now();
         point_requested_coords.header.frame_id = "camera_color_optical_frame";
-        if(_node.now() - _msg_pointcloud.header.stamp > rclcpp::Duration(3, 0)){
+        if(_node.now() - _msg_pointcloud.header.stamp > rclcpp::Duration(3, 0) || !transform_available){
             point_requested_coords.point.x = -1.0f;
             point_requested_coords.point.y = -1.0f; 
             point_requested_coords.point.z = -1.0f;
@@ -535,22 +546,12 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
             point_requested_coords.point.x = (_vertex+pixel_idx_requested)->x;
             point_requested_coords.point.y = (_vertex+pixel_idx_requested)->y; 
             point_requested_coords.point.z = (_vertex+pixel_idx_requested)->z;
-            try{
-                point_requested_coords = _buffer_tf2->transform(point_requested_coords, req->frame, tf2::durationFromSec(0.1));
-            }
-            catch (tf2::TransformException &ex)
-            {
-                ROS_ERROR("%s",ex.what());
-                point_requested_coords.point.x = -1.0f;
-                point_requested_coords.point.y = -1.0f; 
-                point_requested_coords.point.z = -1.0f;
-            }
+            tf2::doTransform(point_requested_coords, point_requested_coords, transform);
         }
         _pixel_requested_coords.push_back(point_requested_coords.point);       
     }
     res -> xyz_coordinate = _pixel_requested_coords;
     return true;
-    
 }
 
 bool BaseRealSenseNode::get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res){
@@ -564,30 +565,29 @@ bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Requ
     auto msg_camera_info = _camera_info[COLOR]; 
     std::vector<geometry_msgs::msg::Point> pixels;
     pixels.reserve(req->points_requested.size());
+    bool transform_available = true;
+    geometry_msgs::msg::TransformStamped transform;
+    try{
+        transform = _buffer_tf2->lookupTransform("camera_color_optical_frame", req->points_requested.at(0).header.frame_id, rclcpp::Time(0));
+    }
+    catch (tf2::TransformException &ex)
+    {
+        ROS_ERROR("%s",ex.what());
+        transform_available = false;
+    }
     for(auto point: req->points_requested)
     { 
         auto transformed_point = point;
-        geometry_msgs::msg::Point pixel;
-        try
-        {
-            _buffer_tf2->transform(point, transformed_point, "camera_color_optical_frame", tf2::durationFromSec(0.1));
-        }
-        catch (tf2::TransformException &ex) 
-        {
-            ROS_ERROR("%s",ex.what());
-        }
-        if(transformed_point.point.z > 0.0f)
-        {
-            // std::cout << transformed_point.point.x << " " << transformed_point.point.y << " " << transformed_point.point.z << std::endl;
-            pixel.x = (msg_camera_info.k[0]*transformed_point.point.x)/transformed_point.point.z + msg_camera_info.k[2]; 
-            pixel.y = (msg_camera_info.k[4]*transformed_point.point.y)/transformed_point.point.z + msg_camera_info.k[5]; 
-            pixel.z = 0.0f;
+        geometry_msgs::msg::Point pixel = geometry_msgs::msg::Point();
+        if(transform_available){
+            tf2::doTransform(point, transformed_point, transform);
+            if(transformed_point.point.z > 0.0f)
+            {
+                // std::cout << transformed_point.point.x << " " << transformed_point.point.y << " " << transformed_point.point.z << std::endl;
+                pixel.x = (msg_camera_info.k[0]*transformed_point.point.x)/transformed_point.point.z + msg_camera_info.k[2]; 
+                pixel.y = (msg_camera_info.k[4]*transformed_point.point.y)/transformed_point.point.z + msg_camera_info.k[5]; 
+                pixel.z = 0.0f;
             }
-        else
-        {
-            pixel.x = 0.0f; 
-            pixel.y = 0.0f;
-            pixel.z = 0.0f;
         }
         pixels.emplace_back(pixel);
     }
