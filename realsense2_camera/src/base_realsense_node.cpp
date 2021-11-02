@@ -541,7 +541,7 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
             point_requested_coords.point.y = -1.0f; 
             point_requested_coords.point.z = -1.0f;
         }else{
-            size_t pixel_idx_requested = trunc(point_requested.y)*_msg_pointcloud.width*_pc_subsample_fct +  trunc(point_requested.x);  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
+            size_t pixel_idx_requested = trunc(point_requested.y)*_depth_intrin.width  +  trunc(point_requested.x);  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
             // WARNING!!! DO NOT CHANGE THE VALUE OF _vertex 
             point_requested_coords.point.x = (_vertex+pixel_idx_requested)->x;
             point_requested_coords.point.y = (_vertex+pixel_idx_requested)->y; 
@@ -2708,7 +2708,8 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
     const rs2::texture_coordinate* color_point = pc.get_texture_coordinates();
 
     rs2_intrinsics depth_intrin = pc.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
-
+    _depth_intrin = depth_intrin;
+    
     sensor_msgs::PointCloud2Modifier modifier(_msg_pointcloud);
     modifier.setPointCloud2FieldsByString(1, "xyz");
     modifier.resize(pc.size());
@@ -2757,33 +2758,7 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
         if (0 == _pointcloud_publisher->get_subscription_count()){
             return;
         }
-        // size_t point_idx;
-        // for (point_idx=0; point_idx < pc.size(); point_idx++, vertex++, color_point++)
-        // {
-        //     float i(color_point->u);
-        //     float j(color_point->v);
-        //     bool valid_color_pixel(i >= 0.f && i <=1.f && j >= 0.f && j <=1.f);
-        //     bool valid_pixel(vertex->z > 0 && (valid_color_pixel || _allow_no_texture_points));
-        //     if (valid_pixel || _ordered_pc)
-        //     {
-        //         *iter_x = vertex->x;
-        //         *iter_y = vertex->y;
-        //         *iter_z = vertex->z;
 
-        //         if (valid_color_pixel)
-        //         {
-        //             color_pixel[0] = i * texture_width;
-        //             color_pixel[1] = j * texture_height;
-        //             int pixx = static_cast<int>(color_pixel[0]);
-        //             int pixy = static_cast<int>(color_pixel[1]);
-        //             int offset = (pixy * texture_width + pixx) * num_colors;
-        //             reverse_memcpy(&(*iter_color), color_data+offset, num_colors);  // PointCloud2 order of rgb is bgr.
-        //         }
-        //         ++iter_x; ++iter_y; ++iter_z;
-        //         ++iter_color;
-        //         ++valid_count;
-        //     }
-        // }
         int resize_fct_2 = _pc_subsample_fct*_pc_subsample_fct;
         for(size_t y=0; y<_msg_pointcloud.height; y++){
             for(size_t x=0; x<_msg_pointcloud.width; x++){
@@ -2836,19 +2811,6 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
         sensor_msgs::PointCloud2Iterator<float>iter_y(_msg_pointcloud, "y");
         sensor_msgs::PointCloud2Iterator<float>iter_z(_msg_pointcloud, "z");
 
-        // for (size_t point_idx=0; point_idx < pc.size(); point_idx++, vertex++)
-        // {
-        //     bool valid_pixel(vertex->z > 0);
-        //     if (valid_pixel || _ordered_pc)
-        //     {
-        //         *iter_x = vertex->x;
-        //         *iter_y = vertex->y;
-        //         *iter_z = vertex->z;
-
-        //         ++iter_x; ++iter_y; ++iter_z;
-        //         ++valid_count;
-        //     }
-        // }
         int resize_fct_2 = _pc_subsample_fct*_pc_subsample_fct;
         for(size_t y=0; y<_msg_pointcloud.height; y++){
             for(size_t x=0; x<_msg_pointcloud.width; x++){
