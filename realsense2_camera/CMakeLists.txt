@@ -100,6 +100,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(realsense2_camera_srvs REQUIRED)
+find_package(diagnostic_updater REQUIRED)
 
 find_package(realsense2 2.48.0)
 if(NOT realsense2_FOUND)
@@ -175,6 +176,7 @@ set(dependencies
   tf2_ros
   tf2_geometry_msgs
   realsense2_camera_srvs 
+  diagnostic_updater
 )
 
 ament_target_dependencies(${PROJECT_NAME}
