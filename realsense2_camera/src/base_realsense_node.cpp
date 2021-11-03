@@ -1027,7 +1027,7 @@ void BaseRealSenseNode::getParameters()
     int pc_texture_idx;
     setNgetNodeParameter(pc_texture_idx, "pointcloud_texture_index", 0);
     _pointcloud_texture = stream_index_pair{rs2_string_to_stream(pc_texture_stream), pc_texture_idx};
-
+    ROS_INFO_STREAM("Pointcloud texture: " << pc_texture_stream);
     setNgetNodeParameter(_filters_str, "filters", DEFAULT_FILTERS);
     _pointcloud |= (_filters_str.find("pointcloud") != std::string::npos);
 
