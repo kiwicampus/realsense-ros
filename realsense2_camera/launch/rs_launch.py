@@ -63,11 +63,11 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'infra_qos',                    'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
                            {'name': 'enable_gyro',                  'default': 'false', 'description': ''},                           
                            {'name': 'enable_accel',                 'default': 'false', 'description': ''},                           
-                           {'name': 'pointcloud_texture_stream',    'default': 'RS2_STREAM_COLOR', 'description': 'texture stream for pointcloud'},                           
+                           {'name': 'pointcloud_texture_stream',    'default': 'RS2_STREAM_ANY', 'description': 'texture stream for pointcloud'},                           
                            {'name': 'pointcloud_texture_index',     'default': '0', 'description': 'texture stream index for pointcloud'},                          
                            {'name': 'enable_sync',                  'default': 'false', 'description': ''},                           
                            {'name': 'align_depth',                  'default': 'true', 'description': ''},                           
-                           {'name': 'filters',                      'default': "''", 'description': ''},                           
+                           {'name': 'filters',                      'default': "'decimation'", 'description': ''},                           
                            {'name': 'clip_distance',                'default': '-2.', 'description': ''},                           
                            {'name': 'linear_accel_cov',             'default': '0.01', 'description': ''},                           
                            {'name': 'initial_reset',                'default': 'true', 'description': ''},                           
@@ -87,7 +87,9 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'robot_base_frame',             'default': 'chassis', 'description': 'base frame for transform between camera and robot'},                           
                            {'name': 'camera_link_x',                'default': '0.21', 'description': 'x translation between base frame and camera'},                           
                            {'name': 'camera_link_y',                'default': '-0.041', 'description': 'y translation between base frame and camera'},                           
-                           {'name': 'camera_link_z',                'default': '0.404', 'description': 'z translation between base frame and camera'},                           
+                           {'name': 'camera_link_z',                'default': '0.404', 'description': 'z translation between base frame and camera'},   
+                           {'name': 'pc_subsample_fct',             'default': '8', 'description': 'Factor used for subsampling the pointcloud. 1 uses the default density'},
+                           {'name': 'decimation_order',             'default': '4', 'description': 'The order of the decimation filter to be applied'},                        
                           ]
 
 def declare_configurable_parameters(parameters):

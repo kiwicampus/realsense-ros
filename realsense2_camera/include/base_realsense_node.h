@@ -406,6 +406,11 @@ namespace realsense2_camera
         //Toxic logs removal
         int _texture_display_logs;
 
+        // Pointcloud subsampling and decimation filter
+        int _pc_subsample_fct;
+        int _decimation_order;
+        rs2_intrinsics _depth_intrin;
+
 
     };//end class
 }

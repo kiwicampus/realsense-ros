@@ -541,7 +541,7 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
             point_requested_coords.point.y = -1.0f; 
             point_requested_coords.point.z = -1.0f;
         }else{
-            size_t pixel_idx_requested = trunc(point_requested.y)*_msg_pointcloud.width +  trunc(point_requested.x);  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
+            size_t pixel_idx_requested = trunc(point_requested.y)*_depth_intrin.width  +  trunc(point_requested.x);  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
             // WARNING!!! DO NOT CHANGE THE VALUE OF _vertex 
             point_requested_coords.point.x = (_vertex+pixel_idx_requested)->x;
             point_requested_coords.point.y = (_vertex+pixel_idx_requested)->y; 
@@ -1027,7 +1027,7 @@ void BaseRealSenseNode::getParameters()
     int pc_texture_idx;
     setNgetNodeParameter(pc_texture_idx, "pointcloud_texture_index", 0);
     _pointcloud_texture = stream_index_pair{rs2_string_to_stream(pc_texture_stream), pc_texture_idx};
-
+    ROS_INFO_STREAM("Pointcloud texture: " << pc_texture_stream);
     setNgetNodeParameter(_filters_str, "filters", DEFAULT_FILTERS);
     _pointcloud |= (_filters_str.find("pointcloud") != std::string::npos);
 
@@ -1150,6 +1150,9 @@ void BaseRealSenseNode::getParameters()
     setNgetNodeParameter(_camera_link_x, "camera_link_x", CAMERA_LINK_X);
     setNgetNodeParameter(_camera_link_y, "camera_link_y", CAMERA_LINK_Y);
     setNgetNodeParameter(_camera_link_z, "camera_link_z", CAMERA_LINK_Z);
+
+    setNgetNodeParameter(_pc_subsample_fct, "pc_subsample_fct", PC_SUBSAMPLE_FCT);
+    setNgetNodeParameter(_decimation_order, "decimation_order", DECIMATION_ORDER);
 
     ROS_INFO_STREAM("Texture logs displaying: " << _texture_display_logs);
 }
@@ -1642,10 +1645,10 @@ void BaseRealSenseNode::setupFilters()
       ROS_INFO("Add Filter: sequence_id_filter");
       _filters.insert(_filters.begin(),NamedFilter("sequence_id_filter", std::make_shared<rs2::sequence_id_filter>()));
     }
-    if (use_decimation_filter)
+    if (use_decimation_filter && _decimation_order > 0)
     {
-      ROS_INFO("Add Filter: decimation");
-      _filters.insert(_filters.begin(),NamedFilter("decimation", std::make_shared<rs2::decimation_filter>()));
+      ROS_INFO("Add Filter: decimation, Order: %i", _decimation_order);
+      _filters.insert(_filters.begin(),NamedFilter("decimation", std::make_shared<rs2::decimation_filter>(_decimation_order)));
     }
     if (_align_depth)
     {
@@ -2705,16 +2708,15 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
     const rs2::texture_coordinate* color_point = pc.get_texture_coordinates();
 
     rs2_intrinsics depth_intrin = pc.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
-
+    _depth_intrin = depth_intrin;
+    
     sensor_msgs::PointCloud2Modifier modifier(_msg_pointcloud);
     modifier.setPointCloud2FieldsByString(1, "xyz");
     modifier.resize(pc.size());
-    if (_ordered_pc)
-    {
-        _msg_pointcloud.width = depth_intrin.width;
-        _msg_pointcloud.height = depth_intrin.height;
-        _msg_pointcloud.is_dense = false;
-    }
+
+    _msg_pointcloud.width = depth_intrin.width / _pc_subsample_fct;
+    _msg_pointcloud.height = depth_intrin.height / _pc_subsample_fct;
+    _msg_pointcloud.is_dense = !_ordered_pc;
 
     vertex = pc.get_vertices();
     size_t valid_count(0);
@@ -2756,57 +2758,76 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
         if (0 == _pointcloud_publisher->get_subscription_count()){
             return;
         }
-        size_t point_idx;
-        for (point_idx=0; point_idx < pc.size(); point_idx++, vertex++, color_point++)
-        {
-            float i(color_point->u);
-            float j(color_point->v);
-            bool valid_color_pixel(i >= 0.f && i <=1.f && j >= 0.f && j <=1.f);
-            bool valid_pixel(vertex->z > 0 && (valid_color_pixel || _allow_no_texture_points));
-            if (valid_pixel || _ordered_pc)
-            {
-                *iter_x = vertex->x;
-                *iter_y = vertex->y;
-                *iter_z = vertex->z;
 
-                if (valid_color_pixel)
+        int resize_fct_2 = _pc_subsample_fct*_pc_subsample_fct;
+        for(size_t y=0; y<_msg_pointcloud.height; y++){
+            for(size_t x=0; x<_msg_pointcloud.width; x++){
+                int current_vertex_index = (y*_msg_pointcloud.width*resize_fct_2 + x*_pc_subsample_fct);
+                float i((color_point+current_vertex_index)->u);
+                float j((color_point+current_vertex_index)->v);
+                bool valid_color_pixel(i >= 0.f && i <=1.f && j >= 0.f && j <=1.f);
+                bool valid_pixel((vertex + current_vertex_index)->z > 0 && (valid_color_pixel || _allow_no_texture_points));
+                if (valid_pixel || _ordered_pc)
                 {
-                    color_pixel[0] = i * texture_width;
-                    color_pixel[1] = j * texture_height;
-                    int pixx = static_cast<int>(color_pixel[0]);
-                    int pixy = static_cast<int>(color_pixel[1]);
-                    int offset = (pixy * texture_width + pixx) * num_colors;
-                    reverse_memcpy(&(*iter_color), color_data+offset, num_colors);  // PointCloud2 order of rgb is bgr.
+                    *iter_x = (vertex + current_vertex_index)->x;
+                    *iter_y = (vertex + current_vertex_index)->y;
+                    *iter_z = (vertex + current_vertex_index)->z;
+
+                    if (valid_color_pixel)
+                    {
+                        color_pixel[0] = i * texture_width;
+                        color_pixel[1] = j * texture_height;
+                        int pixx = static_cast<int>(color_pixel[0]);
+                        int pixy = static_cast<int>(color_pixel[1]);
+                        int offset = (pixy * texture_width + pixx) * num_colors;
+                        reverse_memcpy(&(*iter_color), color_data+offset, num_colors);  // PointCloud2 order of rgb is bgr.
+                    }
+
+                    ++iter_x; ++iter_y; ++iter_z;
+                    ++iter_color;
+                    ++valid_count;
                 }
-                ++iter_x; ++iter_y; ++iter_z;
-                ++iter_color;
-                ++valid_count;
             }
         }
     }
     else
     {
         std::string format_str = "intensity";
+
+        _msg_pointcloud.point_step = addPointField(_msg_pointcloud, format_str.c_str(), 1, sensor_msgs::msg::PointField::FLOAT32, _msg_pointcloud.point_step);
         _msg_pointcloud.row_step = _msg_pointcloud.width * _msg_pointcloud.point_step;
         _msg_pointcloud.data.resize(_msg_pointcloud.height * _msg_pointcloud.row_step);
+
+        //The real world coords are obtained adding the requested pixel index to the pointer that points to the pixel with coords 0,0
+        _vertex = const_cast<rs2::vertex*>(pc.get_vertices());
+        _msg_pointcloud.header.stamp = t;
+
+        //the condition on top is translated here to avoid the for loop if there are no pointcloud subscriber
+        if (0 == _pointcloud_publisher->get_subscription_count()){
+            return;
+        }
 
         sensor_msgs::PointCloud2Iterator<float>iter_x(_msg_pointcloud, "x");
         sensor_msgs::PointCloud2Iterator<float>iter_y(_msg_pointcloud, "y");
         sensor_msgs::PointCloud2Iterator<float>iter_z(_msg_pointcloud, "z");
 
-        for (size_t point_idx=0; point_idx < pc.size(); point_idx++, vertex++)
-        {
-            bool valid_pixel(vertex->z > 0);
-            if (valid_pixel || _ordered_pc)
-            {
-                *iter_x = vertex->x;
-                *iter_y = vertex->y;
-                *iter_z = vertex->z;
+        int resize_fct_2 = _pc_subsample_fct*_pc_subsample_fct;
+        for(size_t y=0; y<_msg_pointcloud.height; y++){
+            for(size_t x=0; x<_msg_pointcloud.width; x++){
+                int current_vertex_index = (y*_msg_pointcloud.width*resize_fct_2 + x*_pc_subsample_fct);
+                bool valid_pixel((vertex + current_vertex_index)->z > 0);
+                if (valid_pixel || _ordered_pc)
+                {
+                    *iter_x = (vertex + current_vertex_index)->x;
+                    *iter_y = (vertex + current_vertex_index)->y;
+                    *iter_z = (vertex + current_vertex_index)->z;
 
-                ++iter_x; ++iter_y; ++iter_z;
-                ++valid_count;
+                    ++iter_x; ++iter_y; ++iter_z;
+                    ++valid_count;
+                }
             }
         }
+        // std::cout << valid_count << std::endl;
     }
     if (_align_depth) _msg_pointcloud.header.frame_id = _optical_frame_id[COLOR];
     else              _msg_pointcloud.header.frame_id = _optical_frame_id[DEPTH];
