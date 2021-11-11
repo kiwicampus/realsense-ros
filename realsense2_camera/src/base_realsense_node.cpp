@@ -3052,7 +3052,7 @@ void BaseRealSenseNode::startMonitoring()
         ROS_INFO_STREAM("Publish diagnostics every " << _diagnostics_period << " seconds.");
         _temperature_updater = std::make_unique<diagnostic_updater::Updater>(&_node, _diagnostics_period);
 
-        _temperature_updater->setHardwareID(serial_no);
+        _temperature_updater->setHardwareID("realsense");
         rs2::options base_sensor(_sensors[_base_stream]);
 
         _temperature_updater->add("Temperatures", [this](diagnostic_updater::DiagnosticStatusWrapper& status)
