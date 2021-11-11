@@ -15,6 +15,7 @@
 """Launch realsense2_camera node."""
 import os
 from launch import LaunchDescription
+from ament_index_python.packages import get_package_share_directory
 import launch_ros.actions
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -76,6 +77,7 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'calib_odom_file',              'default': "''", 'description': "''"},                           
                            {'name': 'topic_odom_in',                'default': "''", 'description': 'topic for T265 wheel odometry'},
                            {'name': 'tf_publish_rate',              'default': '0.0', 'description': 'Rate of publishing static_tf'},
+                           {'name': 'diagnostics_period',           'default': '0.2', 'description': 'Rate of publishing diagnostics. 0=Disabled'},
                            {'name': 'rosbag_filename',              'default': "''", 'description': 'A realsense bagfile to run from as a device'},
                            {'name': 'temporal.holes_fill',          'default': '0', 'description': 'Persistency mode'},
                            {'name': 'stereo_module.exposure.1',     'default': '7500', 'description': 'Initial value for hdr_merge filter'},
@@ -90,6 +92,8 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'camera_link_z',                'default': '0.404', 'description': 'z translation between base frame and camera'},   
                            {'name': 'pc_subsample_fct',             'default': '8', 'description': 'Factor used for subsampling the pointcloud. 1 uses the default density'},
                            {'name': 'decimation_order',             'default': '4', 'description': 'The order of the decimation filter to be applied'},                        
+                           {'name': 'wait_for_device_timeout',      'default': '-1.', 'description': 'Timeout for waiting for device to connect (Seconds)'},
+                           {'name': 'reconnect_timeout',            'default': '6.', 'description': 'Timeout(seconds) between consequtive reconnection attempts'},
                           ]
 
 def declare_configurable_parameters(parameters):
@@ -109,25 +113,25 @@ def generate_launch_description():
             # Realsense
             launch_ros.actions.Node(
                 condition=IfCondition(PythonExpression([LaunchConfiguration('config_file'), " == ''"])),
-                package='realsense2_camera', 
+                package='realsense2_camera',
                 node_namespace=LaunchConfiguration("camera_name"),
                 node_name=LaunchConfiguration("camera_name"),
                 node_executable='realsense2_camera_node',
                 prefix=['stdbuf -o L'],
-                parameters = [set_configurable_parameters(configurable_parameters)
+                parameters=[set_configurable_parameters(configurable_parameters)
                             ],
                 output='screen',
                 arguments=['--ros-args', '--log-level', log_level],
                 ),
             launch_ros.actions.Node(
                 condition=IfCondition(PythonExpression([LaunchConfiguration('config_file'), " != ''"])),
-                package='realsense2_camera', 
+                package='realsense2_camera',
                 node_namespace=LaunchConfiguration("camera_name"),
                 node_name=LaunchConfiguration("camera_name"),
                 node_executable='realsense2_camera_node',
                 prefix=['stdbuf -o L'],
-                parameters = [set_configurable_parameters(configurable_parameters)
-                            ,{LaunchConfiguration("config_file")}
+                parameters=[set_configurable_parameters(configurable_parameters)
+                            , PythonExpression([LaunchConfiguration("config_file")])
                             ],
                 output='screen',
                 arguments=['--ros-args', '--log-level', log_level],
@@ -143,11 +147,11 @@ def generate_launch_description():
             # Realsense
             launch_ros.actions.Node(
                 condition=IfCondition(PythonExpression([LaunchConfiguration('config_file'), " == ''"])),
-                package='realsense2_camera', 
+                package='realsense2_camera',
                 namespace=LaunchConfiguration("camera_name"),
                 name=LaunchConfiguration("camera_name"),
                 executable='realsense2_camera_node',
-                parameters = [set_configurable_parameters(configurable_parameters)
+                parameters=[set_configurable_parameters(configurable_parameters)
                             ],
                 output='screen',
                 arguments=['--ros-args', '--log-level', logger],
@@ -157,12 +161,12 @@ def generate_launch_description():
                 ),
             launch_ros.actions.Node(
                 condition=IfCondition(PythonExpression([LaunchConfiguration('config_file'), " != ''"])),
-                package='realsense2_camera', 
+                package='realsense2_camera',
                 namespace=LaunchConfiguration("camera_name"),
                 name=LaunchConfiguration("camera_name"),
                 executable='realsense2_camera_node',
-                parameters = [set_configurable_parameters(configurable_parameters)
-                            ,{LaunchConfiguration("config_file")}
+                parameters=[set_configurable_parameters(configurable_parameters)
+                            , PythonExpression([LaunchConfiguration("config_file")])
                             ],
                 output='screen',
                 arguments=['--ros-args', '--log-level', logger],
