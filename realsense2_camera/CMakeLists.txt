@@ -102,7 +102,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(realsense2_camera_srvs REQUIRED)
 find_package(diagnostic_updater REQUIRED)
 
-find_package(realsense2 2.50.0)
+find_package(realsense2 2.48.0)
 if(NOT realsense2_FOUND)
     message(FATAL_ERROR "\n\n Intel RealSense SDK 2.0 is missing, please install it from https://github.com/IntelRealSense/librealsense/releases\n\n")
 endif()

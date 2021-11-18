@@ -1,14 +1,14 @@
 # ROS2 Wrapper for Intel&reg; RealSense&trade; Devices
 These are packages for using Intel RealSense cameras (D400 and L500 series, SR300 camera and T265 Tracking Module) with ROS2.
 
-LibRealSense supported version: v2.50.0 (see [realsense2_camera release notes](https://github.com/IntelRealSense/realsense-ros/releases))
+LibRealSense supported version: v2.48.0 (see [realsense2_camera release notes](https://github.com/IntelRealSense/realsense-ros/releases))
 
 ## Kiwi additions
 The following additions were made to the wrapper.
 
 #### Custom services
 We added the package [realsense2_camera_srvs](https://github.com/kiwicampus/realsense-ros/tree/ros2/realsense2_camera_srvs) that contains the following services:
-  - [CoordinateReq.srv](https://github.com/kiwicampus/realsense-ros/tree/ros2/realsense2_camera_srvs/srv/CoordinateReq.srv): Used to request the real world coordinates of a pixel on the RGB image produced from the camera. A server for this service is created in ´base_realsense_node´ with the name ´/camera/get_coords´. This allows to limit the PointCloud2 topic subscriptions and reduce the overall computational load in the ROS2 system. The service now supports the request of coordinates for multiple points. It takes a vector of geometry_msgs::Point elements and returns another vector of geometry_msgs::Point elements with the real world coordinates of each element of the input keeping the same order. Additionally it takes the string parameter 'frame', that determines in which reference frame the points should be returned.
+  - [CoordinateReq.srv](https://github.com/kiwicampus/realsense-ros/tree/ros2/realsense2_camera_srvs/srv/CoordinateReq.srv): Used to request the real world coordinates of a pixel on the RGB image produced from the camera. A server for this service is created in ´base_realsense_node´ with the name ´/camera/get_coords´. This allows to limit the PointCloud2 topic subscriptions and reduce the overall computational load  the ROS2 system. The service now supports the request of coordinates for multiple points. It takes a vector of geometry_msgs::Point elements and returns another vector of geometry_msgs::Point elements with the real world coordinates of each element of the input keeping the same order. Additionally it takes the string parameter 'frame', that determines in which reference frame the points should be returned.
 
 #### Camera transform publisher
 We added a transform broadcaster that publishes the pitch of the realsense camera based on the IMU readings at a given rate. 
@@ -51,7 +51,7 @@ This version supports ROS2 Dashing, Eloquent and Foxy.
 
 
    #### OR
-   - #### Build from sources by downloading the latest [Intel&reg; RealSense&trade; SDK 2.0](https://github.com/IntelRealSense/librealsense/releases/tag/v2.50.0) and follow the instructions under [Linux Installation](https://github.com/IntelRealSense/librealsense/blob/master/doc/installation.md)
+   - #### Build from sources by downloading the latest [Intel&reg; RealSense&trade; SDK 2.0](https://github.com/IntelRealSense/librealsense/releases/tag/v2.48.0) and follow the instructions under [Linux Installation](https://github.com/IntelRealSense/librealsense/blob/master/doc/installation.md)
 
 
    ### Step 3: Install Intel&reg; RealSense&trade; ROS2 wrapper from Sources
