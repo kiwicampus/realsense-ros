@@ -524,6 +524,13 @@ void BaseRealSenseNode::setupServices(){
                 this,
                 std::placeholders::_1,
                 std::placeholders::_2));
+    _get_pitch_srv = _node.create_service<realsense2_camera_srvs::srv::CameraPitchReq>(
+        "get_pitch",
+        std::bind(
+                &BaseRealSenseNode::get_pitch_cb,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
 }
 
 bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
@@ -603,6 +610,12 @@ bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Requ
     }
     // std::cout << "responded\n";
     res->pixels = pixels;
+    return true;
+}
+
+bool BaseRealSenseNode::get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res){
+    (void) req;
+    res->pitch=_cam_pitch;
     return true;
 }
 
