@@ -45,6 +45,7 @@
 #include <realsense2_camera_srvs/srv/coordinate_req.hpp>
 #include <realsense2_camera_srvs/srv/pixel_req.hpp>
 #include <realsense2_camera_srvs/srv/version_req.hpp>
+#include <realsense2_camera_srvs/srv/camera_pitch_req.hpp>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -400,6 +401,9 @@ namespace realsense2_camera
         bool get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res);
         std::unique_ptr<tf2_ros::Buffer> _buffer_tf2;
         std::shared_ptr<tf2_ros::TransformListener> _listener_tf2;
+        //get pitch service
+        rclcpp::Service<realsense2_camera_srvs::srv::CameraPitchReq>::SharedPtr _get_pitch_srv;
+        bool get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res);
         void setupServices();
 
         // Chassis transform timer for waiting pitch calculation
