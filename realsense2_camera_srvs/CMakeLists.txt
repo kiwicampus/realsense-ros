@@ -36,6 +36,7 @@ endif()
 
 # Including services
 set(SRV_FILES
+  "srv/CalibrateImuReq.srv"
   "srv/CoordinateReq.srv"
   "srv/VersionReq.srv"
   "srv/PixelReq.srv"

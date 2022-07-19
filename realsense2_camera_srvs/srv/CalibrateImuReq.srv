@@ -1,0 +1,3 @@
+---
+bool calibrated_with_imu
+float64 calibrated_angle
