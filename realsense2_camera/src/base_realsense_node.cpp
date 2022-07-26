@@ -626,39 +626,46 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
                                          std_srvs::srv::Trigger::Response::SharedPtr res)
 {
     (void)req;
-    // TODO: _imu_accel_initiated can not be defined beforehand.
-    // Check if gyroscope and accelerometer are enabled.
+    // Check if GYRO and ACCEL are enabled.
     if (_enable[GYRO] && _enable[ACCEL])
     {
-        // Reset the acceleration vectors
-        _imu_accel_initiated = false;
-        _imu_accel_x_vector.clear();
-        _imu_accel_y_vector.clear();
-        _imu_accel_z_vector.clear();
-
-        while (!_imu_accel_initiated)
+        if (_imu_accel_initiated)
         {
-            usleep(1000);
-        };
+            // Reset the acceleration vectors
+            _imu_accel_initiated = false;
+            _imu_accel_x_vector.clear();
+            _imu_accel_y_vector.clear();
+            _imu_accel_z_vector.clear();
 
-        // Publish the chassis transform
-        rclcpp::Time current_time = _node.now();
-        publishChassisTransform(current_time, true, true);
+            // Wait until acceleration values are initiated
+            while (!_imu_accel_initiated)
+            {
+                usleep(1000);
+            };
 
-        RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
+            // Publish the chassis transform
+            rclcpp::Time current_time = _node.now();
+            publishChassisTransform(current_time, true, true);
+            RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
 
-        // Fill the response values
-        res->calibrated_with_imu = true;
-        res->calibrated_angle = _cam_pitch;
-        return true;
+            // Fill the response values
+            res->success = true;
+            res->message = _cam_pitch;
+            return true;
+        }
+        else
+        {
+            res->success = false;
+            res->message = "Camera calibration could not take place!";
+            return false;
+        }
     }
     else
     {
-        // Just fill the response values
-        res->calibrated_with_imu = false;
-        res->calibrated_angle = _cam_pitch;
+        res->success = false;
+        res->message = "Camera angle was calibrated using ENV VAR.";
+        return false;
     }
-    return true;
 }
 
 void BaseRealSenseNode::runFirstFrameInitialization(rs2_stream stream_type)
@@ -1941,7 +1948,7 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
             ImuMessage_AddDefaultValues(imu_msg);
             _synced_imu_publisher->Publish(imu_msg);
             ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
-
+            RCLCPP_INFO(this->_node.get_logger(), "Got a measurement!");
             // kiwi Added to calculate first accel measurements
             _imu_accel_x_vector.push_back(imu_msg.linear_acceleration.x);
             _imu_accel_y_vector.push_back(imu_msg.linear_acceleration.y);
