@@ -404,6 +404,9 @@ namespace realsense2_camera
         //get pitch service
         rclcpp::Service<realsense2_camera_srvs::srv::CameraPitchReq>::SharedPtr _get_pitch_srv;
         bool get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res);
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _calibrate_imu_srv;
+        bool calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                              std_srvs::srv::Trigger::Response::SharedPtr res);
         void setupServices();
 
         // Chassis transform timer for waiting pitch calculation
