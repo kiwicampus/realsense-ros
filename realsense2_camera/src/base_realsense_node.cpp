@@ -650,7 +650,7 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
 
             // Fill the response values
             res->success = true;
-            res->message = _cam_pitch;
+            res->message = std::to_string(_cam_pitch);
             return true;
         }
         else
