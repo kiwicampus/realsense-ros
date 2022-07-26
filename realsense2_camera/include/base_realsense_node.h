@@ -34,7 +34,6 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
-#include <realsense2_camera_srvs/srv/calibrate_imu_req.hpp>
 #include <realsense2_camera_srvs/srv/camera_pitch_req.hpp>
 #include <realsense2_camera_srvs/srv/coordinate_req.hpp>
 #include <realsense2_camera_srvs/srv/pixel_req.hpp>
@@ -55,7 +54,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <condition_variable>
 #include <eigen3/Eigen/Geometry>
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include "tf2_ros/message_filter.h"
 
 #include <diagnostic_updater/diagnostic_updater.hpp>
@@ -408,9 +407,9 @@ class BaseRealSenseNode
     bool get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req,
                       realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res);
     // Calibrate IMU service
-    rclcpp::Service<realsense2_camera_srvs::srv::CalibrateImuReq>::SharedPtr _calibrate_imu_srv;
-    bool calibrate_imu_cb(realsense2_camera_srvs::srv::CalibrateImuReq::Request::SharedPtr req,
-                          realsense2_camera_srvs::srv::CalibrateImuReq::Response::SharedPtr res);
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _calibrate_imu_srv;
+    bool calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                          std_srvs::srv::Trigger::Response::SharedPtr res);
     // Setup services method
     void setupServices();
 

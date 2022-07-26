@@ -508,7 +508,7 @@ void BaseRealSenseNode::setupServices()
         "get_pixel", std::bind(&BaseRealSenseNode::get_pixel_cb, this, std::placeholders::_1, std::placeholders::_2));
     _get_pitch_srv = _node.create_service<realsense2_camera_srvs::srv::CameraPitchReq>(
         "get_pitch", std::bind(&BaseRealSenseNode::get_pitch_cb, this, std::placeholders::_1, std::placeholders::_2));
-    _calibrate_imu_srv = _node.create_service<realsense2_camera_srvs::srv::CalibrateImuReq>(
+    _calibrate_imu_srv = _node.create_service<std_srvs::srv::Trigger>(
         "calibrate_imu",
         std::bind(&BaseRealSenseNode::calibrate_imu_cb, this, std::placeholders::_1, std::placeholders::_2));
 }
@@ -618,10 +618,11 @@ bool BaseRealSenseNode::get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq
     return true;
 }
 
-bool BaseRealSenseNode::calibrate_imu_cb(realsense2_camera_srvs::srv::CalibrateImuReq::Request::SharedPtr req,
-                                         realsense2_camera_srvs::srv::CalibrateImuReq::Response::SharedPtr res)
+bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                                         std_srvs::srv::Trigger::Response::SharedPtr res)
 {
     (void)req;
+    // TODO: _imu_accel_initiated can not be defined beforehand.
     // Check if gyroscope and accelerometer are enabled.
     if (_enable[GYRO] && _enable[ACCEL])
     {
