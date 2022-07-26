@@ -1948,7 +1948,7 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
             ImuMessage_AddDefaultValues(imu_msg);
             _synced_imu_publisher->Publish(imu_msg);
             ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
-            RCLCPP_INFO(this->_node.get_logger(), "Got a measurement!");
+
             // kiwi Added to calculate first accel measurements
             _imu_accel_x_vector.push_back(imu_msg.linear_acceleration.x);
             _imu_accel_y_vector.push_back(imu_msg.linear_acceleration.y);
