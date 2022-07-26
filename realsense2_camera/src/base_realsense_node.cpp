@@ -531,6 +531,9 @@ void BaseRealSenseNode::setupServices(){
                 this,
                 std::placeholders::_1,
                 std::placeholders::_2));
+    _calibrate_imu_srv = _node.create_service<std_srvs::srv::Trigger>(
+        "calibrate_imu",
+        std::bind(&BaseRealSenseNode::calibrate_imu_cb, this, std::placeholders::_1, std::placeholders::_2));
 }
 
 bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
@@ -616,6 +619,45 @@ bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Requ
 bool BaseRealSenseNode::get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res){
     (void) req;
     res->pitch=_cam_pitch;
+    return true;
+}
+
+bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                                         std_srvs::srv::Trigger::Response::SharedPtr res)
+{
+    (void)req;
+    // TODO: _imu_accel_initiated can not be defined beforehand.
+    // Check if gyroscope and accelerometer are enabled.
+    if (_enable[GYRO] && _enable[ACCEL])
+    {
+        // Reset the acceleration vectors
+        _imu_accel_initiated = false;
+        _imu_accel_x_vector.clear();
+        _imu_accel_y_vector.clear();
+        _imu_accel_z_vector.clear();
+
+        while (!_imu_accel_initiated)
+        {
+            usleep(1000);
+        };
+
+        // Publish the chassis transform
+        rclcpp::Time current_time = _node.now();
+        publishChassisTransform(current_time, true, true);
+
+        RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
+
+        // Fill the response values
+        res->calibrated_with_imu = true;
+        res->calibrated_angle = _cam_pitch;
+        return true;
+    }
+    else
+    {
+        // Just fill the response values
+        res->calibrated_with_imu = false;
+        res->calibrated_angle = _cam_pitch;
+    }
     return true;
 }
 
