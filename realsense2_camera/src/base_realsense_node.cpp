@@ -645,7 +645,7 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
 
             // Publish the chassis transform
             rclcpp::Time current_time = _node.now();
-            publishChassisTransform(current_time, true, true);
+            publishChassisTransform(current_time, false, true);
             RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
 
             // Fill the response values
