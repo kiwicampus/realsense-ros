@@ -645,8 +645,12 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
 
             // Publish the chassis transform
             rclcpp::Time current_time = _node.now();
-            publishChassisTransform(current_time, false, true);
+            // publishChassisTransform(current_time, false, true);
+            _cam_pitch = getImuPitch();
             RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
+            std_msgs::msg::Float32 pitch_msg;
+            pitch_msg.data = _cam_pitch;
+            _cam_pitch_publisher->publish(pitch_msg);
 
             // Fill the response values
             res->success = true;
@@ -664,6 +668,9 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
     {
         res->success = false;
         res->message = "Camera angle was calibrated using ENV VAR.";
+        std_msgs::msg::Float32 pitch_msg;
+        pitch_msg.data = _cam_pitch;
+        _cam_pitch_publisher->publish(pitch_msg);
         return false;
     }
 }
@@ -1371,6 +1378,8 @@ void BaseRealSenseNode::setupDevice()
 void BaseRealSenseNode::setupPublishers()
 {
     ROS_INFO("setupPublishers...");
+    // Kiwi - Publish camera pitch
+    _cam_pitch_publisher = _node.create_publisher<std_msgs::msg::Float32>("/camera/pitch", rclcpp::QoS(1).keep_all().transient_local().reliable());
     for (auto& stream : IMAGE_STREAMS)
     {
         if (_enable[stream])
@@ -2550,8 +2559,9 @@ void BaseRealSenseNode::publishStaticTransforms()
             });
         else{
             if (_enable[GYRO] && _enable[ACCEL]){ // if enabled calculate pitch based on that later
-                _chassis_transform_tmr = _node.create_wall_timer(std::chrono::milliseconds(1000),
-                                                 std::bind(&BaseRealSenseNode::ChassisTransformTmrCb, this));
+                // We wont longer publish the camera link transform in this node. uncomment for doing that again
+                // _chassis_transform_tmr = _node.create_wall_timer(std::chrono::milliseconds(1000),
+                //                                  std::bind(&BaseRealSenseNode::ChassisTransformTmrCb, this));
             }
             else{ // add to static transform msgs transform based on env variable
                 ROS_INFO_STREAM_ONCE("Using Env var STEREO_ANGLE, pitch (degree): " << _cam_pitch*57.2958);

@@ -29,6 +29,7 @@
 #include <librealsense2/hpp/rs_processing.hpp>
 #include <librealsense2/rs_advanced_mode.hpp>
 
+#include <std_msgs/msg/float32.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -383,6 +384,7 @@ namespace realsense2_camera
         std::vector<double> _imu_accel_z_vector;
         bool _imu_accel_initiated = false;
         void publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch);
+        rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr _cam_pitch_publisher;
         // Subscriber for shutting down
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _shutdown_srv;
         void shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res);
