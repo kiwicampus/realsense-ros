@@ -643,9 +643,7 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
                 usleep(1000);
             };
 
-            // Publish the chassis transform
             rclcpp::Time current_time = _node.now();
-            // publishChassisTransform(current_time, false, true);
             _cam_pitch = getImuPitch();
             RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
             std_msgs::msg::Float32 pitch_msg;
@@ -660,7 +658,7 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
         else
         {
             res->success = false;
-            res->message = "Camera calibration could not take place!";
+            res->message = "Camera calibration could not take place because IMU is not being read";
             return false;
         }
     }
@@ -1379,7 +1377,7 @@ void BaseRealSenseNode::setupPublishers()
 {
     ROS_INFO("setupPublishers...");
     // Kiwi - Publish camera pitch
-    _cam_pitch_publisher = _node.create_publisher<std_msgs::msg::Float32>("/camera/pitch", rclcpp::QoS(1).keep_all().transient_local().reliable());
+    _cam_pitch_publisher = _node.create_publisher<std_msgs::msg::Float32>("pitch", rclcpp::QoS(1).keep_all().transient_local().reliable());
     for (auto& stream : IMAGE_STREAMS)
     {
         if (_enable[stream])
