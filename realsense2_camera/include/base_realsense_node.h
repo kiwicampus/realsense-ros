@@ -29,6 +29,7 @@
 #include <librealsense2/hpp/rs_processing.hpp>
 #include <librealsense2/rs_advanced_mode.hpp>
 
+#include <std_msgs/msg/float32.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -53,7 +54,13 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include "tf2_ros/message_filter.h"
+
+#if defined(HUMBLE)
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#else
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+#endif
+
 #include <eigen3/Eigen/Geometry>
 #include <condition_variable>
 
@@ -383,6 +390,7 @@ namespace realsense2_camera
         std::vector<double> _imu_accel_z_vector;
         bool _imu_accel_initiated = false;
         void publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch);
+        rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr _cam_pitch_publisher;
         // Subscriber for shutting down
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _shutdown_srv;
         void shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res);
@@ -404,6 +412,9 @@ namespace realsense2_camera
         //get pitch service
         rclcpp::Service<realsense2_camera_srvs::srv::CameraPitchReq>::SharedPtr _get_pitch_srv;
         bool get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res);
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _calibrate_imu_srv;
+        bool calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                              std_srvs::srv::Trigger::Response::SharedPtr res);
         void setupServices();
 
         // Chassis transform timer for waiting pitch calculation

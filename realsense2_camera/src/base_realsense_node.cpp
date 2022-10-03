@@ -531,6 +531,9 @@ void BaseRealSenseNode::setupServices(){
                 this,
                 std::placeholders::_1,
                 std::placeholders::_2));
+    _calibrate_imu_srv = _node.create_service<std_srvs::srv::Trigger>(
+        "calibrate_imu",
+        std::bind(&BaseRealSenseNode::calibrate_imu_cb, this, std::placeholders::_1, std::placeholders::_2));
 }
 
 bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
@@ -617,6 +620,57 @@ bool BaseRealSenseNode::get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq
     (void) req;
     res->pitch=_cam_pitch;
     return true;
+}
+
+bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                                         std_srvs::srv::Trigger::Response::SharedPtr res)
+{
+    (void)req;
+    // Check if GYRO and ACCEL are enabled.
+    if (_enable[GYRO] && _enable[ACCEL])
+    {
+        if (_imu_accel_initiated)
+        {
+            // Reset the acceleration vectors
+            _imu_accel_initiated = false;
+            _imu_accel_x_vector.clear();
+            _imu_accel_y_vector.clear();
+            _imu_accel_z_vector.clear();
+
+            // Wait until acceleration values are initiated
+            while (!_imu_accel_initiated)
+            {
+                usleep(1000);
+            };
+
+            rclcpp::Time current_time = _node.now();
+            _cam_pitch = getImuPitch();
+            RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
+            std_msgs::msg::Float32 pitch_msg;
+            pitch_msg.data = _cam_pitch;
+            _cam_pitch_publisher->publish(pitch_msg);
+
+            // Fill the response values
+            res->success = true;
+            res->message = std::to_string(_cam_pitch);
+            return true;
+        }
+        else
+        {
+            res->success = false;
+            res->message = "Camera calibration could not take place because IMU is not being read";
+            return false;
+        }
+    }
+    else
+    {
+        res->success = true;
+        res->message = "Camera angle was calibrated using ENV VAR.";
+        std_msgs::msg::Float32 pitch_msg;
+        pitch_msg.data = _cam_pitch;
+        _cam_pitch_publisher->publish(pitch_msg);
+        return false;
+    }
 }
 
 void BaseRealSenseNode::runFirstFrameInitialization(rs2_stream stream_type)
@@ -1322,6 +1376,8 @@ void BaseRealSenseNode::setupDevice()
 void BaseRealSenseNode::setupPublishers()
 {
     ROS_INFO("setupPublishers...");
+    // Kiwi - Publish camera pitch
+    _cam_pitch_publisher = _node.create_publisher<std_msgs::msg::Float32>("pitch", rclcpp::QoS(1).keep_all().transient_local().reliable());
     for (auto& stream : IMAGE_STREAMS)
     {
         if (_enable[stream])
@@ -2232,7 +2288,7 @@ rclcpp::Time BaseRealSenseNode::frameSystemTimeSec(rs2::frame frame)
     if (frame.get_frame_timestamp_domain() == RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK)
     {
         double elapsed_camera_ns = (/*ms*/ frame.get_timestamp() - /*ms*/ _camera_time_base) * 1e6;
-#if defined(GALACTIC) || defined(ROLLING)
+#if defined(GALACTIC) || defined(ROLLING) || defined(HUMBLE)
         rclcpp::Duration elapsed_camera(rclcpp::Duration::from_nanoseconds(elapsed_camera_ns));
 #else
         rclcpp::Duration elapsed_camera(elapsed_camera_ns);
@@ -2501,8 +2557,9 @@ void BaseRealSenseNode::publishStaticTransforms()
             });
         else{
             if (_enable[GYRO] && _enable[ACCEL]){ // if enabled calculate pitch based on that later
-                _chassis_transform_tmr = _node.create_wall_timer(std::chrono::milliseconds(1000),
-                                                 std::bind(&BaseRealSenseNode::ChassisTransformTmrCb, this));
+                // We wont longer publish the camera link transform in this node. uncomment for doing that again
+                // _chassis_transform_tmr = _node.create_wall_timer(std::chrono::milliseconds(1000),
+                //                                  std::bind(&BaseRealSenseNode::ChassisTransformTmrCb, this));
             }
             else{ // add to static transform msgs transform based on env variable
                 ROS_INFO_STREAM_ONCE("Using Env var STEREO_ANGLE, pitch (degree): " << _cam_pitch*57.2958);
