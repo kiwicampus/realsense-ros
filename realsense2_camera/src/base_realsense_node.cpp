@@ -664,7 +664,7 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
     }
     else
     {
-        res->success = false;
+        res->success = true;
         res->message = "Camera angle was calibrated using ENV VAR.";
         std_msgs::msg::Float32 pitch_msg;
         pitch_msg.data = _cam_pitch;
