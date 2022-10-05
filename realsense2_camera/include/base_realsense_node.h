@@ -53,7 +53,13 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include "tf2_ros/message_filter.h"
+
+#if defined(HUMBLE)
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#else
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+#endif
+
 #include <eigen3/Eigen/Geometry>
 #include <condition_variable>
 
