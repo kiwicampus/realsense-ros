@@ -63,6 +63,11 @@ namespace realsense2_camera
             // sensor_msgs::msg::PointCloud2 _msg_pointcloud; // KIWI: made public
             rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pointcloud_publisher;
             std::string _pointcloud_qos;
+            
+            //Toxic logs removal
+            int _texture_display_logs;
+            // Pointcloud subsampling and decimation filter
+            int _pc_subsample_fct;
     };
 
     class AlignDepthFilter : public NamedFilter

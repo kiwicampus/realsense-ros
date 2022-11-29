@@ -145,6 +145,11 @@ void BaseRealSenseNode::publishTopics()
 {
     getParameters();
     setup();
+    // Kiwi added virtual cam
+    if (_color_virtual_cam >= 0 ){
+        _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
+        _stream_intrinsics[COLOR].width, _stream_intrinsics[COLOR].height);
+    }
     ROS_INFO_STREAM("RealSense Node Is Up!");
 }
 
@@ -357,7 +362,7 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
         _is_initialized_time_base = setBaseTime(frame_time, frame.get_frame_timestamp_domain());
     }
 
-    if (0 != _synced_imu_publisher->getNumSubscribers())
+    if (0 != _synced_imu_publisher->getNumSubscribers() || (!_imu_accel_initiated) )
     {
         auto crnt_reading = *(reinterpret_cast<const float3*>(frame.get_data()));
         Eigen::Vector3d v(crnt_reading.x, crnt_reading.y, crnt_reading.z);
@@ -381,10 +386,35 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
             ImuMessage_AddDefaultValues(imu_msg);
             _synced_imu_publisher->Publish(imu_msg);
             ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+
+            // kiwi Added to calculate first accel measurements
+            _imu_accel_x_vector.push_back(imu_msg.linear_acceleration.x);
+            _imu_accel_y_vector.push_back(imu_msg.linear_acceleration.y);
+            _imu_accel_z_vector.push_back(imu_msg.linear_acceleration.z);
+
+            if (_imu_accel_x_vector.size() > 30 )
+                _imu_accel_initiated = true;
+
             imu_msgs.pop_front();
          }
     }
     m_mutex.unlock();
+}
+
+double BaseRealSenseNode::getImuPitch(){
+    double accel_x = std::accumulate( _imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0) / _imu_accel_x_vector.size();
+    double accel_y = std::accumulate( _imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0) / _imu_accel_y_vector.size();
+    double accel_z = std::accumulate( _imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0) / _imu_accel_z_vector.size();
+
+    // Calculate pitch with imu accel data
+    // With respect to our robot 4.0, raw data: y is looking up, z forward and x to the left.
+    double x_Buff = accel_z;  // corresponding to /camera/imu z
+    double y_Buff = accel_x;  // corresponding to /camera/imu x
+    double z_Buff = accel_y;  // corresponding to /camera/imu y
+
+    double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
+    ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch*57.2958);
+    return pitch;
 }
 
 void BaseRealSenseNode::imu_callback(rs2::frame frame)

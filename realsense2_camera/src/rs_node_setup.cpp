@@ -26,6 +26,8 @@ void BaseRealSenseNode::setup()
 void BaseRealSenseNode::setupFiltersPublishers()
 {
     _synced_imu_publisher = std::make_shared<SyncedImuPublisher>(_node.create_publisher<sensor_msgs::msg::Imu>("imu", 5));
+    // Kiwi: to publish camera pitch
+    _cam_pitch_publisher = _node.create_publisher<std_msgs::msg::Float32>("pitch", rclcpp::QoS(1).keep_all().transient_local().reliable());
 }
 
 void BaseRealSenseNode::monitoringProfileChanges()
@@ -386,16 +388,16 @@ void BaseRealSenseNode::publishServices()
                 this,
                 std::placeholders::_1,
                 std::placeholders::_2));
-    // _get_pitch_srv = _node.create_service<realsense2_camera_srvs::srv::CameraPitchReq>(
-    //     "get_pitch",
-    //     std::bind(
-    //             &BaseRealSenseNode::get_pitch_cb,
-    //             this,
-    //             std::placeholders::_1,
-    //             std::placeholders::_2));
-    // _calibrate_imu_srv = _node.create_service<std_srvs::srv::Trigger>(
-    //     "calibrate_imu",
-    //     std::bind(&BaseRealSenseNode::calibrate_imu_cb, this, std::placeholders::_1, std::placeholders::_2));
+    _get_pitch_srv = _node.create_service<realsense2_camera_srvs::srv::CameraPitchReq>(
+        "get_pitch",
+        std::bind(
+                &BaseRealSenseNode::get_pitch_cb,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
+    _calibrate_imu_srv = _node.create_service<std_srvs::srv::Trigger>(
+        "calibrate_imu",
+        std::bind(&BaseRealSenseNode::calibrate_imu_cb, this, std::placeholders::_1, std::placeholders::_2));
 }
 
 void BaseRealSenseNode::getDeviceInfo(const realsense2_camera_msgs::srv::DeviceInfo::Request::SharedPtr,
@@ -512,59 +514,59 @@ bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Requ
     return true;
 }
 
-// bool BaseRealSenseNode::get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res){
-//     (void) req;
-//     res->pitch=_cam_pitch;
-//     return true;
-// }
+bool BaseRealSenseNode::get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res){
+    (void) req;
+    res->pitch=_cam_pitch;
+    return true;
+}
 
-// bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
-//                                          std_srvs::srv::Trigger::Response::SharedPtr res)
-// {
-//     (void)req;
-//     // Check if GYRO and ACCEL are enabled.
-//     if (_enable[GYRO] && _enable[ACCEL])
-//     {
-//         if (_imu_accel_initiated)
-//         {
-//             // Reset the acceleration vectors
-//             _imu_accel_initiated = false;
-//             _imu_accel_x_vector.clear();
-//             _imu_accel_y_vector.clear();
-//             _imu_accel_z_vector.clear();
+bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                                         std_srvs::srv::Trigger::Response::SharedPtr res)
+{
+    (void)req;
+    // Check if GYRO and ACCEL are enabled.
+    if (_synced_imu_publisher->isEnabled())
+    {
+        if (_imu_accel_initiated)
+        {
+            // Reset the acceleration vectors
+            _imu_accel_initiated = false;
+            _imu_accel_x_vector.clear();
+            _imu_accel_y_vector.clear();
+            _imu_accel_z_vector.clear();
 
-//             // Wait until acceleration values are initiated
-//             while (!_imu_accel_initiated)
-//             {
-//                 usleep(1000);
-//             };
+            // Wait until acceleration values are initiated
+            while (!_imu_accel_initiated)
+            {
+                usleep(1000);
+            };
 
-//             rclcpp::Time current_time = _node.now();
-//             _cam_pitch = getImuPitch();
-//             RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
-//             std_msgs::msg::Float32 pitch_msg;
-//             pitch_msg.data = _cam_pitch;
-//             _cam_pitch_publisher->publish(pitch_msg);
+            rclcpp::Time current_time = _node.now();
+            _cam_pitch = getImuPitch();
+            RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
+            std_msgs::msg::Float32 pitch_msg;
+            pitch_msg.data = _cam_pitch;
+            _cam_pitch_publisher->publish(pitch_msg);
 
-//             // Fill the response values
-//             res->success = true;
-//             res->message = std::to_string(_cam_pitch);
-//             return true;
-//         }
-//         else
-//         {
-//             res->success = false;
-//             res->message = "Camera calibration could not take place because IMU is not being read";
-//             return false;
-//         }
-//     }
-//     else
-//     {
-//         res->success = true;
-//         res->message = "Camera angle was calibrated using ENV VAR.";
-//         std_msgs::msg::Float32 pitch_msg;
-//         pitch_msg.data = _cam_pitch;
-//         _cam_pitch_publisher->publish(pitch_msg);
-//         return false;
-//     }
-// }
+            // Fill the response values
+            res->success = true;
+            res->message = std::to_string(_cam_pitch);
+            return true;
+        }
+        else
+        {
+            res->success = false;
+            res->message = "Camera calibration could not take place because IMU is not being read";
+            return false;
+        }
+    }
+    else
+    {
+        res->success = true;
+        res->message = "Camera angle was calibrated using ENV VAR.";
+        std_msgs::msg::Float32 pitch_msg;
+        pitch_msg.data = _cam_pitch;
+        _cam_pitch_publisher->publish(pitch_msg);
+        return false;
+    }
+}

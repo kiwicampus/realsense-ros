@@ -126,6 +126,7 @@ namespace realsense2_camera
             void Publish(sensor_msgs::msg::Imu msg);     //either send or hold message.
             size_t getNumSubscribers();
             void Enable(bool is_enabled) {_is_enabled=is_enabled;};
+            bool isEnabled(){ return _is_enabled;}; // Kiwi: make it public so we can check is the imu is enabled 
         
         private:
             void PublishPendingMessages();
@@ -392,13 +393,6 @@ namespace realsense2_camera
         tf2::Quaternion getInclinationQuat(double pitch);
         double getImuPitch();
         void ChassisTransformTmrCb();
-
-        //Toxic logs removal
-        int _texture_display_logs;
-
-        // Pointcloud subsampling and decimation filter
-        int _pc_subsample_fct;
-        int _decimation_order;
 
     };//end class
 }
