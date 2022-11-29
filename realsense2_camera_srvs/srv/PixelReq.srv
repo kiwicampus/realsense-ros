@@ -1,0 +1,3 @@
+geometry_msgs/PointStamped[] points_requested
+---
+geometry_msgs/Point[] pixels

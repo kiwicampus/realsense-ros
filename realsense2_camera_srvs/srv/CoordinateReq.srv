@@ -1,0 +1,4 @@
+geometry_msgs/Point[] pixel_requested # Being [0] Width and [1] Height
+string frame   # The desired frame to get the points
+---
+geometry_msgs/Point[] xyz_coordinate

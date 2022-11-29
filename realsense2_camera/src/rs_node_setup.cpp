@@ -358,6 +358,44 @@ void BaseRealSenseNode::publishServices()
             [&](const realsense2_camera_msgs::srv::DeviceInfo::Request::SharedPtr req,
                         realsense2_camera_msgs::srv::DeviceInfo::Response::SharedPtr res)
                         {getDeviceInfo(req, res);});
+
+    // KIWI: service for shuting down node before something going wrong
+    _cam_pitch = getEnv("STEREO_ANGLE", 15.0)/57.2958; // convert to rads
+    _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock());
+    _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2);
+    _shutdown_srv = _node.create_service<std_srvs::srv::Trigger>("shutdown",
+                    std::bind(&BaseRealSenseNode::shutdown_callback, this, std::placeholders::_1, std::placeholders::_2));
+    _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
+            "get_coords",
+            std::bind(
+                &BaseRealSenseNode::get_coords_cb,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
+    _get_version_srv = _node.create_service<realsense2_camera_srvs::srv::VersionReq>(
+            "get_version",
+            std::bind(
+                &BaseRealSenseNode::get_version_cb,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
+    _get_pixel_srv = _node.create_service<realsense2_camera_srvs::srv::PixelReq>(
+        "get_pixel",
+        std::bind(
+                &BaseRealSenseNode::get_pixel_cb,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
+    // _get_pitch_srv = _node.create_service<realsense2_camera_srvs::srv::CameraPitchReq>(
+    //     "get_pitch",
+    //     std::bind(
+    //             &BaseRealSenseNode::get_pitch_cb,
+    //             this,
+    //             std::placeholders::_1,
+    //             std::placeholders::_2));
+    // _calibrate_imu_srv = _node.create_service<std_srvs::srv::Trigger>(
+    //     "calibrate_imu",
+    //     std::bind(&BaseRealSenseNode::calibrate_imu_cb, this, std::placeholders::_1, std::placeholders::_2));
 }
 
 void BaseRealSenseNode::getDeviceInfo(const realsense2_camera_msgs::srv::DeviceInfo::Request::SharedPtr,
@@ -378,3 +416,155 @@ void BaseRealSenseNode::getDeviceInfo(const realsense2_camera_msgs::srv::DeviceI
 
     res->sensors = sensors_names.str().substr(0, sensors_names.str().size()-1);
 }
+
+void BaseRealSenseNode::shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res)
+{
+    (void)req;
+    res->success = true;
+    res->message = "Stereo Node will be killed";
+    RCLCPP_WARN(_node.get_logger(), "SHUTTING DOWN NODE");
+    _dev.hardware_reset();
+}
+
+bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
+    std::vector<geometry_msgs::msg::Point> _pixel_requested = req->pixel_requested;
+    std::vector<geometry_msgs::msg::Point> _pixel_requested_coords;
+    _pixel_requested_coords.reserve(req->pixel_requested.size());
+    bool transform_available = true;
+    geometry_msgs::msg::TransformStamped transform;
+    try{
+        transform = _buffer_tf2->lookupTransform(req->frame, "camera_color_optical_frame", rclcpp::Time(0));
+    }
+    catch (tf2::TransformException &ex)
+    {
+        ROS_ERROR("%s",ex.what());
+        transform_available = false;
+    }
+    ROS_WARN_STREAM_COND(_node.now() - _pc_filter->_msg_pointcloud.header.stamp > rclcpp::Duration(3, 0), "Warning: Pointcloud not beeing generated");
+    ROS_WARN_STREAM_COND(!transform_available, "Warning: No transform available");
+    for(auto point_requested: _pixel_requested){
+        geometry_msgs::msg::PointStamped point_requested_coords;
+        point_requested_coords.header.stamp = _node.now();
+        point_requested_coords.header.frame_id = "camera_color_optical_frame";
+        if(_node.now() - _pc_filter->_msg_pointcloud.header.stamp > rclcpp::Duration(3, 0) || !transform_available){
+            point_requested_coords.point.x = -1.0f;
+            point_requested_coords.point.y = -1.0f; 
+            point_requested_coords.point.z = -1.0f;
+        }else{
+            size_t pixel_idx_requested = trunc(point_requested.y)*_pc_filter->_depth_intrin.width  +  trunc(point_requested.x);  // Thanks: https://github.com/IntelRealSense/librealsense/issues/1783
+            // WARNING!!! DO NOT CHANGE THE VALUE OF _vertex 
+            point_requested_coords.point.x = (_pc_filter->_vertex+pixel_idx_requested)->x;
+            point_requested_coords.point.y = (_pc_filter->_vertex+pixel_idx_requested)->y; 
+            point_requested_coords.point.z = (_pc_filter->_vertex+pixel_idx_requested)->z;
+            tf2::doTransform(point_requested_coords, point_requested_coords, transform);
+        }
+        _pixel_requested_coords.push_back(point_requested_coords.point);       
+    }
+    res -> xyz_coordinate = _pixel_requested_coords;
+    return true;
+}
+
+bool BaseRealSenseNode::get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res){
+    (void) req;
+    res->version=_dev.get_info(RS2_CAMERA_INFO_FIRMWARE_VERSION);
+    return true;
+}
+
+bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res)
+{
+    auto msg_camera_info = _camera_info[COLOR]; 
+    std::vector<geometry_msgs::msg::Point> pixels;
+    if(req->points_requested.empty())
+    {
+        ROS_ERROR("Requests for pixels was empty");
+        res->pixels = pixels;
+        return true;
+    }
+    pixels.reserve(req->points_requested.size());
+    bool transform_available = true;
+    geometry_msgs::msg::TransformStamped transform;
+    try{
+        transform = _buffer_tf2->lookupTransform("camera_color_optical_frame", req->points_requested.at(0).header.frame_id, rclcpp::Time(0));
+    }
+    catch (tf2::TransformException &ex)
+    {
+        ROS_ERROR("%s",ex.what());
+        transform_available = false;
+    }
+    for(auto point: req->points_requested)
+    { 
+        auto transformed_point = point;
+        geometry_msgs::msg::Point pixel = geometry_msgs::msg::Point();
+        if(transform_available){
+            tf2::doTransform(point, transformed_point, transform);
+            if(transformed_point.point.z > 0.0f)
+            {
+                // std::cout << transformed_point.point.x << " " << transformed_point.point.y << " " << transformed_point.point.z << std::endl;
+                pixel.x = (msg_camera_info.k[0]*transformed_point.point.x)/transformed_point.point.z + msg_camera_info.k[2]; 
+                pixel.y = (msg_camera_info.k[4]*transformed_point.point.y)/transformed_point.point.z + msg_camera_info.k[5]; 
+                pixel.z = 0.0f;
+            }
+        }
+        pixels.emplace_back(pixel);
+    }
+    // std::cout << "responded\n";
+    res->pixels = pixels;
+    return true;
+}
+
+// bool BaseRealSenseNode::get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res){
+//     (void) req;
+//     res->pitch=_cam_pitch;
+//     return true;
+// }
+
+// bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+//                                          std_srvs::srv::Trigger::Response::SharedPtr res)
+// {
+//     (void)req;
+//     // Check if GYRO and ACCEL are enabled.
+//     if (_enable[GYRO] && _enable[ACCEL])
+//     {
+//         if (_imu_accel_initiated)
+//         {
+//             // Reset the acceleration vectors
+//             _imu_accel_initiated = false;
+//             _imu_accel_x_vector.clear();
+//             _imu_accel_y_vector.clear();
+//             _imu_accel_z_vector.clear();
+
+//             // Wait until acceleration values are initiated
+//             while (!_imu_accel_initiated)
+//             {
+//                 usleep(1000);
+//             };
+
+//             rclcpp::Time current_time = _node.now();
+//             _cam_pitch = getImuPitch();
+//             RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
+//             std_msgs::msg::Float32 pitch_msg;
+//             pitch_msg.data = _cam_pitch;
+//             _cam_pitch_publisher->publish(pitch_msg);
+
+//             // Fill the response values
+//             res->success = true;
+//             res->message = std::to_string(_cam_pitch);
+//             return true;
+//         }
+//         else
+//         {
+//             res->success = false;
+//             res->message = "Camera calibration could not take place because IMU is not being read";
+//             return false;
+//         }
+//     }
+//     else
+//     {
+//         res->success = true;
+//         res->message = "Camera angle was calibrated using ENV VAR.";
+//         std_msgs::msg::Float32 pitch_msg;
+//         pitch_msg.data = _cam_pitch;
+//         _cam_pitch_publisher->publish(pitch_msg);
+//         return false;
+//     }
+// }

@@ -132,11 +132,12 @@ void reverse_memcpy(unsigned char* dst, const unsigned char* src, size_t n)
 
 void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id)
 {
-    {
-        std::lock_guard<std::mutex> lock_guard(_mutex_publisher);
-        if ((!_pointcloud_publisher) || (!(_pointcloud_publisher->get_subscription_count())))
-            return;
-    }
+    // moved down so the get coords service can work
+    // {
+    //     std::lock_guard<std::mutex> lock_guard(_mutex_publisher);
+    //     if ((!_pointcloud_publisher) || (!(_pointcloud_publisher->get_subscription_count())))
+    //         return;
+    // }
     rs2_stream texture_source_id = static_cast<rs2_stream>(_filter->get_option(rs2_option::RS2_OPTION_STREAM_FILTER));
     bool use_texture = texture_source_id != RS2_STREAM_ANY;
     static int warn_count(0);
@@ -165,19 +166,28 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
     const rs2::vertex* vertex = pc.get_vertices();
     const rs2::texture_coordinate* color_point = pc.get_texture_coordinates();
 
-    rs2_intrinsics depth_intrin = pc.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
+    _depth_intrin = pc.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
 
     sensor_msgs::PointCloud2Modifier modifier(_msg_pointcloud);
     modifier.setPointCloud2FieldsByString(1, "xyz");    
     modifier.resize(pc.size());
     if (_ordered_pc)
     {
-        _msg_pointcloud.width = depth_intrin.width;
-        _msg_pointcloud.height = depth_intrin.height;
+        _msg_pointcloud.width = _depth_intrin.width;
+        _msg_pointcloud.height = _depth_intrin.height;
         _msg_pointcloud.is_dense = false;
     }
 
-    vertex = pc.get_vertices();
+    //The real world coords are obtained adding the requested pixel index to the pointer that points to the pixel with coords 0,0
+    _vertex = const_cast<rs2::vertex*>(pc.get_vertices());
+    _msg_pointcloud.header.stamp = t;
+
+    //the condition on top is translated here to avoid the for loop if there are no pointcloud subscriber
+    {
+        std::lock_guard<std::mutex> lock_guard(_mutex_publisher);
+        if ((!_pointcloud_publisher) || (!(_pointcloud_publisher->get_subscription_count())))
+            return;
+    }
     size_t valid_count(0);
     if (use_texture)
     {

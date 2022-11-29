@@ -45,6 +45,12 @@ namespace realsense2_camera
             void setPublisher();
             void Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id);
 
+            // KIWI: Make it public so we can get it in the get coords service call
+            sensor_msgs::msg::PointCloud2 _msg_pointcloud;
+            //DO NOT WRITE THIS VARIABLE, ONLY READ OPERATIONS ARE ALLOWED
+            std::atomic<rs2::vertex*> _vertex;
+            rs2_intrinsics _depth_intrin;
+
         private:
             void setParameters();
 
@@ -54,7 +60,7 @@ namespace realsense2_camera
             bool _allow_no_texture_points;
             bool _ordered_pc;
             std::mutex _mutex_publisher;
-            sensor_msgs::msg::PointCloud2 _msg_pointcloud;
+            // sensor_msgs::msg::PointCloud2 _msg_pointcloud; // KIWI: made public
             rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pointcloud_publisher;
             std::string _pointcloud_qos;
     };
