@@ -70,10 +70,6 @@ void BaseRealSenseNode::getParameters()
     _color_virtual_cam =  _parameters->setParam<int>(param_name, COLOR_VIRTUAL_CAMERA);
     _parameters_names.push_back(param_name);
 
-    param_name = std::string("texture_display_logs");
-    _texture_display_logs =  _parameters->setParam<int>(param_name, TEXTURE_DISPLAY_LOGS);
-    _parameters_names.push_back(param_name);
-
     param_name = std::string("robot_base_frame");
     _robot_base_frame =  _parameters->setParam<std::string>(param_name, ROBOT_BASE_FRAME);
     _parameters_names.push_back(param_name);
