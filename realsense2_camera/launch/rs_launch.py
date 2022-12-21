@@ -98,6 +98,8 @@ def set_configurable_parameters(parameters):
 
 def generate_launch_description():
     log_level = 'info'
+    respawn = bool(int(os.getenv(key="RESPAWN_NODES", default=1)))
+    respawn_delay = float(os.getenv(key="RESPAWN_DELAY", default=5))
     if (os.getenv('ROS_DISTRO') == "dashing") or (os.getenv('ROS_DISTRO') == "eloquent"):
         return LaunchDescription(declare_configurable_parameters(configurable_parameters) + [
             # Realsense
@@ -112,6 +114,8 @@ def generate_launch_description():
                             ],
                 output='screen',
                 arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
+                respawn=respawn,
+                respawn_delay=respawn_delay,
                 ),
             launch_ros.actions.Node(
                 condition=IfCondition(PythonExpression([LaunchConfiguration('config_file'), " != ''"])),
@@ -125,6 +129,8 @@ def generate_launch_description():
                             ],
                 output='screen',
                 arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
+                respawn=respawn,
+                respawn_delay=respawn_delay,
                 ),
             ])
     else:
@@ -141,6 +147,8 @@ def generate_launch_description():
                 output='screen',
                 arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
                 emulate_tty=True,
+                respawn=respawn,
+                respawn_delay=respawn_delay,
                 ),
             launch_ros.actions.Node(
                 condition=IfCondition(PythonExpression([LaunchConfiguration('config_file'), " != ''"])),
@@ -154,5 +162,7 @@ def generate_launch_description():
                 output='screen',
                 arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
                 emulate_tty=True,
+                respawn=respawn,
+                respawn_delay=respawn_delay,
                 ),
         ])
