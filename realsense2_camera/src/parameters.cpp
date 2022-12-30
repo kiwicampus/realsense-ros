@@ -64,6 +64,27 @@ void BaseRealSenseNode::getParameters()
     _base_frame_id = _parameters->setParam<std::string>(param_name, DEFAULT_BASE_FRAME_ID);
     _base_frame_id = (static_cast<std::ostringstream&&>(std::ostringstream() << _camera_name << "_" << _base_frame_id)).str();
     _parameters_names.push_back(param_name);
+
+    // Kiwi added
+    param_name = std::string("color_virtual_cam");
+    _color_virtual_cam =  _parameters->setParam<int>(param_name, COLOR_VIRTUAL_CAMERA);
+    _parameters_names.push_back(param_name);
+
+    param_name = std::string("robot_base_frame");
+    _robot_base_frame =  _parameters->setParam<std::string>(param_name, ROBOT_BASE_FRAME);
+    _parameters_names.push_back(param_name);
+
+    param_name = std::string("camera_link_x");
+    _camera_link_x =  _parameters->setParam<double>(param_name, CAMERA_LINK_X);
+    _parameters_names.push_back(param_name);
+    
+    param_name = std::string("camera_link_y");
+    _camera_link_y =  _parameters->setParam<double>(param_name, CAMERA_LINK_Y);
+    _parameters_names.push_back(param_name);
+    
+    param_name = std::string("camera_link_z");
+    _camera_link_z =  _parameters->setParam<double>(param_name, CAMERA_LINK_Z);
+    _parameters_names.push_back(param_name);
 }
 
 void BaseRealSenseNode::setDynamicParams()
