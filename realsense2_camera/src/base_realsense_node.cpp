@@ -1377,7 +1377,7 @@ void BaseRealSenseNode::startDiagnosticsUpdater()
         ROS_INFO_STREAM("Publish diagnostics every " << _diagnostics_period << " seconds.");
         _diagnostics_updater = std::make_shared<diagnostic_updater::Updater>(&_node, _diagnostics_period);
 
-        _diagnostics_updater->setHardwareID(serial_no);
+        _diagnostics_updater->setHardwareID("realsense");
 
         _diagnostics_updater->add("Temperatures", [this](diagnostic_updater::DiagnosticStatusWrapper& status)
         {
