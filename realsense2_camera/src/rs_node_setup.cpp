@@ -27,7 +27,7 @@ void BaseRealSenseNode::setupFiltersPublishers()
 {
     _synced_imu_publisher = std::make_shared<SyncedImuPublisher>(_node.create_publisher<sensor_msgs::msg::Imu>("imu", 5));
     // Kiwi: to publish camera pitch
-    _cam_pitch_publisher = _node.create_publisher<std_msgs::msg::Float32>("pitch", rclcpp::QoS(1).keep_all().transient_local().reliable());
+    _cam_pitch_publisher = _node.create_publisher<std_msgs::msg::Float32>("pitch", rclcpp::SensorDataQoS());
 }
 
 void BaseRealSenseNode::monitoringProfileChanges()
