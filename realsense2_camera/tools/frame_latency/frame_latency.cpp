@@ -33,10 +33,10 @@ FrameLatencyNode::FrameLatencyNode( const rclcpp::NodeOptions & node_options )
                      rmw_qos_profile_default ),
         [&, this]( const sensor_msgs::msg::Image::SharedPtr msg ) {
             rclcpp::Time curr_time = this->get_clock()->now();
-            auto latency = ( curr_time - msg->header.stamp ).seconds();
-            ROS_INFO_STREAM( "Got msg with address 0x"
-                             << std::hex << reinterpret_cast< std::uintptr_t >( msg.get() )
-                             << std::dec << " with latency of " << latency << " [sec]" );
+            // auto latency = ( curr_time - msg->header.stamp ).seconds();
+            // ROS_INFO_STREAM( "Got msg with address 0x"
+                            //  << std::hex << reinterpret_cast< std::uintptr_t >( msg.get() )
+                            //  << std::dec << " with latency of " << latency << " [sec]" );
         } );
 }
 
