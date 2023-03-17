@@ -66,13 +66,6 @@ def generate_launch_description():
                     name="camera",
                     parameters=[set_configurable_parameters(configurable_parameters)],
                     extra_arguments=[{'use_intra_process_comms': LaunchConfiguration("intra_process_comms")}]) ,
-                ComposableNode(
-                    package='realsense2_camera',
-                    namespace='',
-                    plugin='rs2_ros::tools::frame_latency::' + rs_latency_tool_class,
-                    name='frame_latency',
-                    parameters=[set_configurable_parameters(configurable_parameters)],
-                    extra_arguments=[{'use_intra_process_comms': LaunchConfiguration("intra_process_comms")}]) ,
                 ]
     )])
 
