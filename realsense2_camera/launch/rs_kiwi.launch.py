@@ -25,12 +25,12 @@ def generate_launch_description():
             # -------------- COMPOSITION -------------------------------
             DeclareLaunchArgument(
                 "use_composition",
-                default_value="False",
+                default_value="True",
                 description="Whether to use node composition",
             ),
             DeclareLaunchArgument(
                 "use_respawn",
-                default_value="False",
+                default_value="True",
                 description="Whether to respawn if a node crashes. Applied when composition is disabled.",
             ),
             GroupAction(
