@@ -1225,8 +1225,15 @@ void BaseRealSenseNode::startDiagnosticsUpdater()
                 {
                     if (sensor->supports(option))
                     {
-                        status.add(rs2_option_to_string(option), sensor->get_option(option));
-                        got_temperature = true;
+                        try
+                        {
+                            status.add(rs2_option_to_string(option), sensor->get_option(option));
+                            got_temperature = true;
+                        }
+                        catch(const std::exception& e)
+                        {
+                            // std::cerr << e.what() << '\n';
+                        }
                     }
                 }
                 if (got_temperature) break;

@@ -3,7 +3,7 @@ import os
 import cv2
 
 from ament_index_python.packages import get_package_share_directory
-from launch_ros.actions import LoadComposableNodes
+from launch_ros.actions import LoadComposableNodes  # , Node
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
 from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.descriptions import ComposableNode
@@ -17,7 +17,7 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration("use_respawn")
 
     vision_config = os.path.join(
-        get_package_share_directory("vision_bringup"), "launch", "vision_params.yaml"
+        get_package_share_directory("vision_bringup"), "params", "vision_params.yaml"
     )
 
     return LaunchDescription(
@@ -36,6 +36,12 @@ def generate_launch_description():
             GroupAction(
                 condition=IfCondition(LaunchConfiguration("use_composition")),
                 actions=[
+                    # Node(
+                    #     name="vision_kronos",
+                    #     package="rclcpp_components",
+                    #     executable="component_container_isolated",
+                    #     output="both",
+                    # ),
                     LoadComposableNodes(
                         target_container="vision_kronos",
                         composable_node_descriptions=[
