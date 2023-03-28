@@ -14,25 +14,38 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
 
+    use_sim_time = LaunchConfiguration("use_sim_time")
+    params_file = LaunchConfiguration("params_file")
     use_respawn = LaunchConfiguration("use_respawn")
-
-    vision_config = os.path.join(
-        get_package_share_directory("vision_bringup"), "params", "vision_params.yaml"
-    )
+    use_composition = LaunchConfiguration("use_composition")
 
     return LaunchDescription(
         [
-            # -------------- COMPOSITION -------------------------------
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="True",
+                description="Use simulation (Gazebo) clock if True",
+            ),
+            DeclareLaunchArgument(
+                "params_file",
+                default_value=os.path.join(
+                    get_package_share_directory("vision_bringup"),
+                    "params",
+                    "vision_params.yaml",
+                ),
+                description="Full path to the ROS2 parameters file to use for all launched nodes",
+            ),
             DeclareLaunchArgument(
                 "use_composition",
                 default_value="True",
-                description="Whether to use node composition",
+                description="Whether to use composition or not",
             ),
             DeclareLaunchArgument(
                 "use_respawn",
                 default_value="True",
                 description="Whether to respawn if a node crashes. Applied when composition is disabled.",
             ),
+            # -------------- COMPOSITION -------------------------------
             GroupAction(
                 condition=IfCondition(LaunchConfiguration("use_composition")),
                 actions=[
@@ -46,7 +59,7 @@ def generate_launch_description():
                         target_container="vision_kronos",
                         composable_node_descriptions=[
                             ComposableNode(
-                                parameters=[vision_config],
+                                parameters=[params_file],
                                 package="realsense2_camera",
                                 plugin="realsense2_camera::RealSenseNodeFactory",
                                 name="camera",
