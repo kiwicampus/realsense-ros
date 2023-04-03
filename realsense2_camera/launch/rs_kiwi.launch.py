@@ -19,6 +19,13 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration("use_respawn")
     use_composition = LaunchConfiguration("use_composition")
 
+    launch_arguments = {
+        "use_sim_time": use_sim_time,
+        "params_file": params_file,
+        "use_respawn": use_respawn,
+        "use_composition": use_composition,
+    }
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -47,7 +54,7 @@ def generate_launch_description():
             ),
             # -------------- COMPOSITION -------------------------------
             GroupAction(
-                condition=IfCondition(LaunchConfiguration("use_composition")),
+                condition=IfCondition(use_composition),
                 actions=[
                     # Node(
                     #     name="vision_kronos",
@@ -72,7 +79,7 @@ def generate_launch_description():
             ),
             # -------------- NO COMPOSITION ----------------------------
             GroupAction(
-                condition=UnlessCondition(LaunchConfiguration("use_composition")),
+                condition=UnlessCondition(use_composition),
                 actions=[
                     IncludeLaunchDescription(
                         PythonLaunchDescriptionSource(
@@ -83,7 +90,8 @@ def generate_launch_description():
                                 ),
                                 "/rs_launch.py",
                             ]
-                        )
+                        ),
+                        launch_arguments=launch_arguments.items(),
                     )
                 ],
             ),
