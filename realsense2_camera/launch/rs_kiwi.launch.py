@@ -11,16 +11,17 @@ from launch.substitutions import LaunchConfiguration
 from launch import LaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
+# -------------- CONFIGURABLE PARAMETERS -----------------------------------
+use_composition = "True" if int(os.getenv("VISION_USE_COMPOSITION", False)) else "False"
+use_respawn = "True" if int(os.getenv("VISION_USE_RESPAWN", True)) else "False"
+params_file = os.path.join(
+    get_package_share_directory("vision_bringup"), "params", "vision_params.yaml"
+)
+
 
 def generate_launch_description():
 
-    use_sim_time = LaunchConfiguration("use_sim_time")
-    params_file = LaunchConfiguration("params_file")
-    use_respawn = LaunchConfiguration("use_respawn")
-    use_composition = LaunchConfiguration("use_composition")
-
     launch_arguments = {
-        "use_sim_time": use_sim_time,
         "params_file": params_file,
         "use_respawn": use_respawn,
         "use_composition": use_composition,
@@ -29,27 +30,18 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument(
-                "use_sim_time",
-                default_value="True",
-                description="Use simulation (Gazebo) clock if True",
-            ),
-            DeclareLaunchArgument(
                 "params_file",
-                default_value=os.path.join(
-                    get_package_share_directory("vision_bringup"),
-                    "params",
-                    "vision_params.yaml",
-                ),
+                default_value=params_file,
                 description="Full path to the ROS2 parameters file to use for all launched nodes",
             ),
             DeclareLaunchArgument(
                 "use_composition",
-                default_value="True",
+                default_value=use_composition,
                 description="Whether to use composition or not",
             ),
             DeclareLaunchArgument(
                 "use_respawn",
-                default_value="True",
+                default_value=use_respawn,
                 description="Whether to respawn if a node crashes. Applied when composition is disabled.",
             ),
             # -------------- COMPOSITION -------------------------------
