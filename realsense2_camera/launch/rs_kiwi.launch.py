@@ -12,7 +12,7 @@ from launch import LaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 # -------------- CONFIGURABLE PARAMETERS -----------------------------------
-use_composition = "True" if int(os.getenv("VISION_USE_COMPOSITION", False)) else "False"
+use_composition = "True" if int(os.getenv("VISION_USE_COMPOSITION", True)) else "False"
 use_respawn = "True" if int(os.getenv("VISION_USE_RESPAWN", True)) else "False"
 params_file = os.path.join(
     get_package_share_directory("vision_bringup"), "params", "vision_params.yaml"
