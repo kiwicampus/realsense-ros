@@ -362,6 +362,7 @@ namespace realsense2_camera
         std::vector<double> _imu_accel_z_vector;
         bool _imu_accel_initiated = false;
         void publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch);
+        rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr _cam_imu_angles_publisher;
         rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr _cam_pitch_publisher;
         rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr _cam_roll_publisher;
         // Subscriber for shutting down
@@ -373,6 +374,7 @@ namespace realsense2_camera
         bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
         std::atomic<double> _cam_pitch;
         std::atomic<double> _cam_roll;
+        std::atomic<double> _cam_yaw;
         //version service:
         rclcpp::Service<realsense2_camera_srvs::srv::VersionReq>::SharedPtr _get_version_srv;
         bool get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res);
