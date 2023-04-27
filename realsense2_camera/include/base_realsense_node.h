@@ -363,6 +363,7 @@ namespace realsense2_camera
         bool _imu_accel_initiated = false;
         void publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch);
         rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr _cam_pitch_publisher;
+        rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr _cam_roll_publisher;
         // Subscriber for shutting down
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _shutdown_srv;
         void shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res);
@@ -371,6 +372,7 @@ namespace realsense2_camera
         rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
         bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
         std::atomic<double> _cam_pitch;
+        std::atomic<double> _cam_roll;
         //version service:
         rclcpp::Service<realsense2_camera_srvs::srv::VersionReq>::SharedPtr _get_version_srv;
         bool get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res);
@@ -391,7 +393,7 @@ namespace realsense2_camera
         rclcpp::TimerBase::SharedPtr _chassis_transform_tmr;
         tf2::Quaternion getInclinationQuat();
         tf2::Quaternion getInclinationQuat(double pitch);
-        double getImuPitch();
+        std::array<double, 2> getImuPitchandRoll();
         void ChassisTransformTmrCb();
 
     };//end class

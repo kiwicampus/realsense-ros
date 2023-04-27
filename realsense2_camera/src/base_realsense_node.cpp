@@ -5,6 +5,7 @@
 #include "assert.h"
 #include <algorithm>
 #include <mutex>
+#include <array>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <rclcpp/clock.hpp>
 #include <fstream>
@@ -401,20 +402,25 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
     m_mutex.unlock();
 }
 
-double BaseRealSenseNode::getImuPitch(){
-    double accel_x = std::accumulate( _imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0) / _imu_accel_x_vector.size();
-    double accel_y = std::accumulate( _imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0) / _imu_accel_y_vector.size();
-    double accel_z = std::accumulate( _imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0) / _imu_accel_z_vector.size();
+std::array<double, 2> BaseRealSenseNode::getImuPitchandRoll() {
+    double accel_x = std::accumulate(_imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0) / _imu_accel_x_vector.size();
+    double accel_y = std::accumulate(_imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0) / _imu_accel_y_vector.size();
+    double accel_z = std::accumulate(_imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0) / _imu_accel_z_vector.size();
 
-    // Calculate pitch with imu accel data
+    // Calculate pitch and roll with imu accel data
     // With respect to our robot 4.0, raw data: y is looking up, z forward and x to the left.
     double x_Buff = accel_z;  // corresponding to /camera/imu z
     double y_Buff = accel_x;  // corresponding to /camera/imu x
     double z_Buff = accel_y;  // corresponding to /camera/imu y
 
     double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
-    ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch*57.2958);
-    return pitch;
+    double roll =  atan2(-y_Buff, -z_Buff);    //signs were modified doing tests.
+    //double roll = atan2(y_Buff, sqrt(pow(x_Buff, 2) + pow(z_Buff, 2)));
+
+
+    ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch * 57.2958 << " roll (degree): " << roll * 57.2958);
+
+    return {pitch, roll};
 }
 
 void BaseRealSenseNode::imu_callback(rs2::frame frame)

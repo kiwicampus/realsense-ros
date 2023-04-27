@@ -28,6 +28,8 @@ void BaseRealSenseNode::setupFiltersPublishers()
     _synced_imu_publisher = std::make_shared<SyncedImuPublisher>(_node.create_publisher<sensor_msgs::msg::Imu>("imu", 5));
     // Kiwi: to publish camera pitch
     _cam_pitch_publisher = _node.create_publisher<std_msgs::msg::Float32>("pitch", rclcpp::QoS(1).keep_all().transient_local().reliable());
+    _cam_roll_publisher = _node.create_publisher<std_msgs::msg::Float32>("roll", rclcpp::QoS(1).keep_all().transient_local().reliable());
+
 }
 
 void BaseRealSenseNode::monitoringProfileChanges()
@@ -542,11 +544,17 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
             };
 
             rclcpp::Time current_time = _node.now();
-            _cam_pitch = getImuPitch();
+            std::array<double, 2> angles = getImuPitchandRoll();
+            double _cam_pitch = angles[0];
+            double _cam_roll = angles[1];
             RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
+            RCLCPP_INFO(_node.get_logger(), "Calibrated roll angle [deg]: %f", _cam_roll * 57.2958);
             std_msgs::msg::Float32 pitch_msg;
+            std_msgs::msg::Float32 roll_msg;
             pitch_msg.data = _cam_pitch;
+            roll_msg.data = _cam_roll;
             _cam_pitch_publisher->publish(pitch_msg);
+            _cam_roll_publisher->publish(roll_msg);
 
             // Fill the response values
             res->success = true;
@@ -565,8 +573,11 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
         res->success = true;
         res->message = "Camera angle was calibrated using ENV VAR.";
         std_msgs::msg::Float32 pitch_msg;
+        std_msgs::msg::Float32 roll_msg;
         pitch_msg.data = _cam_pitch;
+        roll_msg.data = _cam_roll;
         _cam_pitch_publisher->publish(pitch_msg);
+        _cam_roll_publisher->publish(roll_msg);
         return false;
     }
 }
