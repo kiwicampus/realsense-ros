@@ -552,18 +552,11 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
             RCLCPP_INFO(_node.get_logger(), "Calibrated pitch angle [deg]: %f", _cam_pitch * 57.2958);
             RCLCPP_INFO(_node.get_logger(), "Calibrated roll angle [deg]: %f", _cam_roll * 57.2958);
             
-            double cy = std::cos(_cam_yaw * 0.5);
-            double sy = std::sin(_cam_yaw * 0.5);
-            double cr = std::cos(_cam_roll * 0.5);
-            double sr = std::sin(_cam_roll * 0.5);
-            double cp = std::cos(_cam_pitch * 0.5);
-            double sp = std::sin(_cam_pitch * 0.5);
+            tf2::Quaternion _Quaternion;
+            _Quaternion.setRPY(_cam_roll, _cam_pitch, _cam_yaw);
 
             geometry_msgs::msg::Quaternion Quaternion_msg;
-            Quaternion_msg.w = cy * cr * cp + sy * sr * sp;
-            Quaternion_msg.x = cy * sr * cp - sy * cr * sp;
-            Quaternion_msg.y = cy * cr * sp + sy * sr * cp;
-            Quaternion_msg.z = sy * cr * cp - cy * sr * sp;
+            Quaternion_msg = tf2::toMsg(_Quaternion);
 
             _cam_imu_angles_publisher->publish(Quaternion_msg);
 
