@@ -1,17 +1,17 @@
 """Launch the vision stack in a component container."""
 import os
-import cv2
 
 from ament_index_python.packages import get_package_share_directory
-from launch_ros.actions import LoadComposableNodes  # , Node
+from launch_ros.actions import LoadComposableNodes
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch_ros.descriptions import ComposableNode
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import PythonExpression
 from launch import LaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 # -------------- CONFIGURABLE PARAMETERS -----------------------------------
+use_cpp_stack = "True" if int(os.getenv("NODE_VIDEO_MAPPING_CPP", False)) else "False"
 use_composition = "True" if int(os.getenv("VISION_USE_COMPOSITION", True)) else "False"
 use_respawn = "True" if int(os.getenv("VISION_USE_RESPAWN", True)) else "False"
 params_file = os.path.join(
@@ -46,7 +46,7 @@ def generate_launch_description():
             ),
             # -------------- COMPOSITION -------------------------------
             GroupAction(
-                condition=IfCondition(use_composition),
+                condition=IfCondition(PythonExpression([use_composition, " and ", use_cpp_stack])),
                 actions=[
                     # Node(
                     #     name="vision_kronos",
@@ -71,7 +71,7 @@ def generate_launch_description():
             ),
             # -------------- NO COMPOSITION ----------------------------
             GroupAction(
-                condition=UnlessCondition(use_composition),
+                condition=IfCondition(PythonExpression(["not ", use_cpp_stack, " or not ", use_composition])),
                 actions=[
                     IncludeLaunchDescription(
                         PythonLaunchDescriptionSource(
