@@ -363,7 +363,7 @@ void BaseRealSenseNode::publishServices()
 
     // KIWI: service for shuting down node before something going wrong
     _cam_pitch = getEnv("STEREO_PITCH_ANGLE", 15.0)/57.2958; // convert to rads
-    _cam_roll = getEnv("STEREO__ROLL_ANGLE", 15.0)/57.2958; // convert to rads    
+    _cam_roll = getEnv("STEREO__ROLL_ANGLE", 0.0)/57.2958; // convert to rads    
     _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock(), tf2::Duration(tf2::BUFFER_CORE_DEFAULT_CACHE_TIME), _node.shared_from_this());
     _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2, _node.shared_from_this());
     _shutdown_srv = _node.create_service<std_srvs::srv::Trigger>("shutdown",
