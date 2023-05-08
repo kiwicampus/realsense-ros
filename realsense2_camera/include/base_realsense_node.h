@@ -363,8 +363,6 @@ namespace realsense2_camera
         bool _imu_accel_initiated = false;
         void publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch);
         rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr _cam_imu_angles_publisher;
-        rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr _cam_pitch_publisher;
-        rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr _cam_roll_publisher;
         // Subscriber for shutting down
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _shutdown_srv;
         void shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res);

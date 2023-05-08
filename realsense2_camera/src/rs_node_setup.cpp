@@ -28,9 +28,6 @@ void BaseRealSenseNode::setupFiltersPublishers()
     _synced_imu_publisher = std::make_shared<SyncedImuPublisher>(_node.create_publisher<sensor_msgs::msg::Imu>("imu", 5));
     // Kiwi: to publish camera pitch
     _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>("camera_imu_angles", rclcpp::QoS(1).keep_all().transient_local().reliable());
-    _cam_pitch_publisher = _node.create_publisher<std_msgs::msg::Float32>("pitch", rclcpp::QoS(1).keep_all().transient_local().reliable());
-    _cam_roll_publisher = _node.create_publisher<std_msgs::msg::Float32>("roll", rclcpp::QoS(1).keep_all().transient_local().reliable());
-
 }
 
 void BaseRealSenseNode::monitoringProfileChanges()
@@ -365,7 +362,8 @@ void BaseRealSenseNode::publishServices()
                         {getDeviceInfo(req, res);});
 
     // KIWI: service for shuting down node before something going wrong
-    _cam_pitch = getEnv("STEREO_ANGLE", 15.0)/57.2958; // convert to rads
+    _cam_pitch = getEnv("STEREO_PITCH_ANGLE", 15.0)/57.2958; // convert to rads
+    _cam_roll = getEnv("STEREO__ROLL_ANGLE", 15.0)/57.2958; // convert to rads    
     _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock(), tf2::Duration(tf2::BUFFER_CORE_DEFAULT_CACHE_TIME), _node.shared_from_this());
     _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2, _node.shared_from_this());
     _shutdown_srv = _node.create_service<std_srvs::srv::Trigger>("shutdown",
@@ -575,13 +573,12 @@ bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
     else
     {
         res->success = true;
-        res->message = "Camera angle was calibrated using ENV VAR.";
-        std_msgs::msg::Float32 pitch_msg;
-        std_msgs::msg::Float32 roll_msg;
-        pitch_msg.data = _cam_pitch;
-        roll_msg.data = _cam_roll;
-        _cam_pitch_publisher->publish(pitch_msg);
-        _cam_roll_publisher->publish(roll_msg);
+        res->message = "Camera angle was calibrated using ENV VAR.";       
+        tf2::Quaternion _Quaternion;
+        _Quaternion.setRPY(_cam_roll, _cam_pitch, _cam_yaw);
+        geometry_msgs::msg::Quaternion Quaternion_msg;
+        Quaternion_msg = tf2::toMsg(_Quaternion);
+        _cam_imu_angles_publisher->publish(Quaternion_msg);
         return false;
     }
 }
