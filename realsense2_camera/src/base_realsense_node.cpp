@@ -415,10 +415,6 @@ std::array<double, 2> BaseRealSenseNode::getImuPitchandRoll() {
 
     double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
     double roll =  atan2(-y_Buff, -z_Buff);    //signs were modified doing tests.
-    //double roll = atan2(y_Buff, sqrt(pow(x_Buff, 2) + pow(z_Buff, 2)));
-
-
-    ROS_INFO_STREAM_ONCE("Calculated pitch (degree): " << pitch * 57.2958 << " roll (degree): " << roll * 57.2958);
 
     return {pitch, roll};
 }
