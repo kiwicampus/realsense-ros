@@ -393,6 +393,7 @@ namespace realsense2_camera
         rclcpp::TimerBase::SharedPtr _chassis_transform_tmr;
         tf2::Quaternion getInclinationQuat();
         tf2::Quaternion getInclinationQuat(double pitch);
+        //publish camera imu angles
         std::array<double, 2> getImuPitchandRoll();
         void ChassisTransformTmrCb();
 
