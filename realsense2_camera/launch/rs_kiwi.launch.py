@@ -6,13 +6,12 @@ import os
 from launch import LaunchDescription
 from ament_index_python.packages import get_package_share_directory
 import launch_ros.actions
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, GroupAction
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.conditions import IfCondition
-from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 
-# -------------- CONFIGURABLE PARAMETERS -----------------------------------
+
 configurable_parameters = [{'name': 'camera_name',                  'default': 'camera', 'description': 'camera unique name'},
                            {'name': 'serial_no',                    'default': "''", 'description': 'choose device by serial number'},
                            {'name': 'usb_port_id',                  'default': "''", 'description': 'choose device by usb port id'},
@@ -90,8 +89,6 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                             {'name': 'hole_filling_filter.enable',               'default': 'true', 'description': 'emitter always on'},
                             # {'name': 'disparity_filter.enable',               'default': 'true', 'description': 'emitter always on'},
                             {'name': 'disparity_to_depth.enable',               'default': 'true', 'description': 'emitter always on'},
-                            # KIWI ADDED
-                            {'name': 'use_composition',               'default': 'true', 'description': 'Whether to use composition or not'},
                           ]
 
 def declare_configurable_parameters(parameters):
@@ -107,22 +104,64 @@ def generate_launch_description():
     use_cpp_stack = bool(os.getenv("NODE_VIDEO_MAPPING_CPP", default=0))
     use_composition = bool(os.getenv("VISION_USE_COMPOSITION", default=1))
     if use_composition and use_cpp_stack:
-        return LaunchDescription(declare_configurable_parameters(configurable_parameters) + [
-                    LoadComposableNodes(
-                        target_container="vision_kronos",
-                        composable_node_descriptions=[
-                            ComposableNode(
-                                parameters=[set_configurable_parameters(configurable_parameters)],
-                                package="realsense2_camera",
-                                plugin="realsense2_camera::RealSenseNodeFactory",
-                                name="camera",
-                                namespace="camera",
-                                extra_arguments=[{"use_intra_process_comms": True}],
-                            )
-                        ],
+        return LaunchDescription(
+            declare_configurable_parameters(configurable_parameters)
+            + [
+                # Realsense
+                GroupAction(
+                    condition=IfCondition(
+                        PythonExpression([LaunchConfiguration("config_file"), " == ''"])
                     ),
-                ])
-    elif not use_composition or not use_cpp_stack:
+                    actions=[
+                        launch_ros.actions.LoadComposableNodes(
+                            target_container="vision_kronos",
+                            composable_node_descriptions=[
+                                ComposableNode(
+                                    parameters=[
+                                        set_configurable_parameters(
+                                            configurable_parameters
+                                        )
+                                    ],
+                                    package="realsense2_camera",
+                                    plugin="realsense2_camera::RealSenseNodeFactory",
+                                    name="camera",
+                                    namespace="camera",
+                                    extra_arguments=[{"use_intra_process_comms": True}],
+                                )
+                            ],
+                        ),
+                    ],
+                ),
+                GroupAction(
+                    condition=IfCondition(
+                        PythonExpression([LaunchConfiguration("config_file"), " != ''"])
+                    ),
+                    actions=[
+                        launch_ros.actions.LoadComposableNodes(
+                            target_container="vision_kronos",
+                            composable_node_descriptions=[
+                                ComposableNode(
+                                    parameters=[
+                                        set_configurable_parameters(
+                                            configurable_parameters
+                                        ),
+                                        PythonExpression(
+                                            [LaunchConfiguration("config_file")]
+                                        ),
+                                    ],
+                                    package="realsense2_camera",
+                                    plugin="realsense2_camera::RealSenseNodeFactory",
+                                    name="camera",
+                                    namespace="camera",
+                                    extra_arguments=[{"use_intra_process_comms": True}],
+                                )
+                            ],
+                        ),
+                    ],
+                ),
+            ]
+        )
+    else:
         return LaunchDescription(declare_configurable_parameters(configurable_parameters) + [
             # Realsense
             launch_ros.actions.Node(
