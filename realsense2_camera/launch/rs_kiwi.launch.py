@@ -101,8 +101,8 @@ def generate_launch_description():
     log_level = 'info'
     respawn = bool(int(os.getenv(key="RESPAWN_NODES", default=1)))
     respawn_delay = float(os.getenv(key="RESPAWN_DELAY", default=5))
-    use_cpp_stack = bool(os.getenv("NODE_VIDEO_MAPPING_CPP", default=0))
-    use_composition = bool(os.getenv("VISION_USE_COMPOSITION", default=1))
+    use_cpp_stack = int(os.getenv("NODE_VIDEO_MAPPING_CPP", default=0))
+    use_composition = int(os.getenv("VISION_USE_COMPOSITION", default=1))
     if use_composition and use_cpp_stack:
         return LaunchDescription(
             declare_configurable_parameters(configurable_parameters)
