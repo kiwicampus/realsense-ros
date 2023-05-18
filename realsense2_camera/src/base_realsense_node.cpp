@@ -88,15 +88,11 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     _is_profile_changed(false),
     _is_align_depth_changed(false)
 {
-    if ( use_intra_process )
-    {
-        ROS_INFO("Intra-Process communication enabled");
-    }
-    else
-    {
-        // intra-process requirment of QoS.durability=Volatile cannot be fulfilled with `StaticTransformBroadcaster` as it only support `TransientLocal` durability.
-        _static_tf_broadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(node);
-    }
+
+    // Kiwi added: allow static tf with intra process
+    rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
+    options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    _static_tf_broadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(node, tf2_ros::StaticBroadcasterQoS(), options);
 
     _image_format[1] = CV_8UC1;    // CVBridge type
     _image_format[2] = CV_16UC1;    // CVBridge type
