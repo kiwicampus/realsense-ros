@@ -27,7 +27,17 @@ void BaseRealSenseNode::setupFiltersPublishers()
 {
     _synced_imu_publisher = std::make_shared<SyncedImuPublisher>(_node.create_publisher<sensor_msgs::msg::Imu>("imu", 5));
     // Kiwi: to publish camera pitch
-    _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>("camera_imu_angles", rclcpp::QoS(1).keep_all().transient_local().reliable());
+    if (_use_intra_process)
+    {
+        ROS_INFO("Using intra-process for camera angles");
+        auto _cam_angles_qos = rclcpp::SensorDataQoS();
+        _cam_angles_qos.durability_volatile();
+        _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>("camera_imu_angles", _cam_angles_qos);
+    }
+    else
+    {
+        _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>("camera_imu_angles", rclcpp::QoS(1).keep_all().transient_local().reliable());
+    }
 }
 
 void BaseRealSenseNode::monitoringProfileChanges()
@@ -363,9 +373,11 @@ void BaseRealSenseNode::publishServices()
 
     // KIWI: service for shuting down node before something going wrong
     _cam_pitch = getEnv("STEREO_PITCH_ANGLE", 15.0)/57.2958; // convert to rads
-    _cam_roll = getEnv("STEREO__ROLL_ANGLE", 0.0)/57.2958; // convert to rads    
+    _cam_roll = getEnv("STEREO_ROLL_ANGLE", 0.0)/57.2958; // convert to rads    
     _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock(), tf2::Duration(tf2::BUFFER_CORE_DEFAULT_CACHE_TIME), _node.shared_from_this());
-    _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2, _node.shared_from_this());
+    rclcpp::SubscriptionOptionsWithAllocator<std::allocator<void>> options;
+    options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2, _node.shared_from_this(), true,tf2_ros::DynamicListenerQoS(),tf2_ros::StaticListenerQoS(),  options, options);
     _shutdown_srv = _node.create_service<std_srvs::srv::Trigger>("shutdown",
                     std::bind(&BaseRealSenseNode::shutdown_callback, this, std::placeholders::_1, std::placeholders::_2));
     _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
