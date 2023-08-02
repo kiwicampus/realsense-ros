@@ -36,7 +36,9 @@ void BaseRealSenseNode::setupFiltersPublishers()
     }
     else
     {
-        _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>("camera_imu_angles", rclcpp::QoS(1).keep_all().transient_local().reliable());
+        rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
+        options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+        _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>("camera_imu_angles", rclcpp::QoS(1).keep_all().transient_local().reliable(), options);
     }
 }
 
