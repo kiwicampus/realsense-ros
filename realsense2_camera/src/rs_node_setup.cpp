@@ -27,19 +27,9 @@ void BaseRealSenseNode::setupFiltersPublishers()
 {
     _synced_imu_publisher = std::make_shared<SyncedImuPublisher>(_node.create_publisher<sensor_msgs::msg::Imu>("imu", 5));
     // Kiwi: to publish camera pitch
-    if (_use_intra_process)
-    {
-        ROS_INFO("Using intra-process for camera angles");
-        auto _cam_angles_qos = rclcpp::SensorDataQoS();
-        _cam_angles_qos.durability_volatile();
-        _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>("camera_imu_angles", _cam_angles_qos);
-    }
-    else
-    {
-        rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
-        options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
-        _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>("camera_imu_angles", rclcpp::QoS(1).keep_all().transient_local().reliable(), options);
-    }
+    rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
+    options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>("camera_imu_angles", rclcpp::QoS(1).keep_all().transient_local().reliable(), options);
 }
 
 void BaseRealSenseNode::monitoringProfileChanges()
