@@ -504,13 +504,10 @@ bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Requ
         geometry_msgs::msg::Point pixel = geometry_msgs::msg::Point();
         if(transform_available){
             tf2::doTransform(point, transformed_point, transform);
-            if(transformed_point.point.z > 0.0f)
-            {
-                // std::cout << transformed_point.point.x << " " << transformed_point.point.y << " " << transformed_point.point.z << std::endl;
-                pixel.x = (msg_camera_info.k[0]*transformed_point.point.x)/transformed_point.point.z + msg_camera_info.k[2]; 
-                pixel.y = (msg_camera_info.k[4]*transformed_point.point.y)/transformed_point.point.z + msg_camera_info.k[5]; 
-                pixel.z = 0.0f;
-            }
+            // std::cout << transformed_point.point.x << " " << transformed_point.point.y << " " << transformed_point.point.z << std::endl;
+            pixel.x = (msg_camera_info.k[0]*transformed_point.point.x)/(transformed_point.point.z + 0.00001) + msg_camera_info.k[2]; 
+            pixel.y = (msg_camera_info.k[4]*transformed_point.point.y)/(transformed_point.point.z + 0.00001) + msg_camera_info.k[5]; 
+            pixel.z = 0.0f;
         }
         pixels.emplace_back(pixel);
     }
