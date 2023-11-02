@@ -507,7 +507,7 @@ bool BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Requ
             // std::cout << transformed_point.point.x << " " << transformed_point.point.y << " " << transformed_point.point.z << std::endl;
             pixel.x = (msg_camera_info.k[0]*transformed_point.point.x)/(transformed_point.point.z + 0.00001) + msg_camera_info.k[2]; 
             pixel.y = (msg_camera_info.k[4]*transformed_point.point.y)/(transformed_point.point.z + 0.00001) + msg_camera_info.k[5]; 
-            pixel.z = 0.0f;
+            pixel.z = transformed_point.point.z;
         }
         pixels.emplace_back(pixel);
     }
