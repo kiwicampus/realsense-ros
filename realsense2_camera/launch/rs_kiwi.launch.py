@@ -4,7 +4,6 @@
 """Launch realsense2_camera node."""
 import os
 from launch import LaunchDescription
-from ament_index_python.packages import get_package_share_directory
 import launch_ros.actions
 from launch.actions import DeclareLaunchArgument, GroupAction
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -98,11 +97,11 @@ def set_configurable_parameters(parameters):
     return dict([(param['name'], LaunchConfiguration(param['name'])) for param in parameters])
 
 def generate_launch_description():
-    log_level = 'info'
     respawn = bool(int(os.getenv(key="RESPAWN_NODES", default=1)))
     respawn_delay = float(os.getenv(key="RESPAWN_DELAY", default=5))
     use_cpp_stack = int(os.getenv("LAUNCH_VIDEO_MAPPING_CPP", default=0))
     use_composition = int(os.getenv("VISION_USE_COMPOSITION", default=1))
+    vision_container = os.getenv("VISION_CONTAINER_NAME",default="vision_kronos")
     if use_composition and use_cpp_stack:
         return LaunchDescription(
             declare_configurable_parameters(configurable_parameters)
@@ -114,7 +113,7 @@ def generate_launch_description():
                     ),
                     actions=[
                         launch_ros.actions.LoadComposableNodes(
-                            target_container="vision_kronos",
+                            target_container=vision_container,
                             composable_node_descriptions=[
                                 ComposableNode(
                                     parameters=[
@@ -138,7 +137,7 @@ def generate_launch_description():
                     ),
                     actions=[
                         launch_ros.actions.LoadComposableNodes(
-                            target_container="vision_kronos",
+                            target_container=vision_container,
                             composable_node_descriptions=[
                                 ComposableNode(
                                     parameters=[
