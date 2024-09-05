@@ -431,6 +431,7 @@ void BaseRealSenseNode::shutdown_callback(const std_srvs::srv::Trigger::Request:
     res->message = "Stereo Node will be killed";
     RCLCPP_WARN(_node.get_logger(), "SHUTTING DOWN NODE");
     _dev.hardware_reset();
+    _dev = rs2::device();
 }
 
 bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res){
