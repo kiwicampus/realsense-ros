@@ -67,7 +67,6 @@ void SyncedImuPublisher::PublishPendingMessages()
 }
 void SyncedImuPublisher::FlushPendingMessages()
 {
-    ROS_WARN_STREAM("Flushing pending messages, this is risks syncronization! Be careful.");
     while (!_pending_messages.empty())
     {
         _pending_messages.pop();
@@ -398,6 +397,7 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
             catch(const std::exception& e)
             {
                 std::cerr << e.what() << '\n';
+                ROS_WARN("Flushing pending messages, this is risks syncronization! Be careful.");
                 _synced_imu_publisher->FlushPendingMessages();
                 return;
             }

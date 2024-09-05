@@ -127,10 +127,10 @@ namespace realsense2_camera
             size_t getNumSubscribers();
             void Enable(bool is_enabled) {_is_enabled=is_enabled;};
             bool isEnabled(){ return _is_enabled;}; // Kiwi: make it public so we can check is the imu is enabled 
+            void FlushPendingMessages();
         
         private:
             void PublishPendingMessages();
-            void FlushPendingMessages();
 
         private:
             std::mutex                                          _mutex;
