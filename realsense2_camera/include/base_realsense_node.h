@@ -130,6 +130,7 @@ namespace realsense2_camera
         
         private:
             void PublishPendingMessages();
+            void FlushPendingMessages();
 
         private:
             std::mutex                                          _mutex;

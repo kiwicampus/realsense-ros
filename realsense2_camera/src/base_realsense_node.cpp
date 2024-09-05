@@ -65,6 +65,14 @@ void SyncedImuPublisher::PublishPendingMessages()
         _pending_messages.pop();
     }
 }
+void SyncedImuPublisher::FlushPendingMessages()
+{
+    ROS_WARN_STREAM("Flushing pending messages, this is risks syncronization! Be careful.");
+    while (!_pending_messages.empty())
+    {
+        _pending_messages.pop();
+    }
+}
 size_t SyncedImuPublisher::getNumSubscribers()
 { 
     if (!_publisher) return 0;
@@ -381,8 +389,18 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
         {
             sensor_msgs::msg::Imu imu_msg = imu_msgs.front();
             ImuMessage_AddDefaultValues(imu_msg);
-            _synced_imu_publisher->Publish(imu_msg);
-            ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+
+            try
+            {
+                _synced_imu_publisher->Publish(imu_msg);
+                ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << e.what() << '\n';
+                _synced_imu_publisher->FlushPendingMessages();
+                return;
+            }
 
             // kiwi Added to calculate first accel measurements
             _imu_accel_x_vector.push_back(imu_msg.linear_acceleration.x);
