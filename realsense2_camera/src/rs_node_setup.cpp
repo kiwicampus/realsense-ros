@@ -463,11 +463,11 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
             point_requested_coords.point.x = (_pc_filter->_vertex+pixel_idx_requested)->x;
             point_requested_coords.point.y = (_pc_filter->_vertex+pixel_idx_requested)->y; 
             point_requested_coords.point.z = (_pc_filter->_vertex+pixel_idx_requested)->z;
-            if(point_requested_coords.point.x > 0.0 && point_requested_coords.point.y > 0.0 && point_requested_coords.point.z > 0.0){
+            if(point_requested_coords.point.z > 0.0){
                 tf2::doTransform(point_requested_coords, point_requested_coords, transform);
             }
             else{
-                // if point is 0,0,0, it means that the point is not in the depth image, then we return -1,-1,-1
+                // if point is behind the camera, it means that the point is not in the depth image, then we return -1,-1,-1
                 point_requested_coords.point.x = -1.0f;
                 point_requested_coords.point.y = -1.0f;
                 point_requested_coords.point.z = -1.0f;
