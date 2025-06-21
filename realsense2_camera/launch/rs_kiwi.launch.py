@@ -3,14 +3,13 @@
 
 """Launch realsense2_camera node."""
 import os
-from launch import LaunchDescription
-from ament_index_python.packages import get_package_share_directory
-import launch_ros.actions
-from launch.actions import DeclareLaunchArgument, GroupAction
-from launch.substitutions import LaunchConfiguration, PythonExpression
-from launch.conditions import IfCondition
-from launch_ros.descriptions import ComposableNode
 
+import launch_ros.actions
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch_ros.descriptions import ComposableNode
 
 configurable_parameters = [{'name': 'camera_name',                  'default': 'camera', 'description': 'camera unique name'},
                            {'name': 'serial_no',                    'default': "''", 'description': 'choose device by serial number'},
@@ -68,6 +67,8 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'camera_link_x',                'default': '0.21', 'description': 'x translation between base frame and camera'},                           
                            {'name': 'camera_link_y',                'default': '-0.041', 'description': 'y translation between base frame and camera'},                           
                            {'name': 'camera_link_z',                'default': '0.404', 'description': 'z translation between base frame and camera'},   
+                           {'name': 'stereo_color_publish_rate',    'default': '-1.0', 'description': 'Custom publish rate for stereo color stream. -1 means use default FPS'},
+                           {'name': 'stereo_depth_publish_rate',    'default': '-1.0', 'description': 'Custom publish rate for stereo depth stream. -1 means use default FPS'},
                            {'name': 'pc_subsample_fct',             'default': '8', 'description': 'Factor used for subsampling the pointcloud. 1 uses the default density'},
                            {'name': 'color_qos',                    'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
                            {'name': 'confidence_qos',               'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    

@@ -57,11 +57,6 @@
 #include <realsense2_camera_srvs/srv/pixel_req.hpp>
 #include <realsense2_camera_srvs/srv/version_req.hpp>
 #include <realsense2_camera_srvs/srv/camera_pitch_req.hpp>
-#include <std_srvs/srv/trigger.hpp>
-#include <realsense2_camera_srvs/srv/coordinate_req.hpp>
-#include <realsense2_camera_srvs/srv/pixel_req.hpp>
-#include <realsense2_camera_srvs/srv/version_req.hpp>
-#include <realsense2_camera_srvs/srv/camera_pitch_req.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include "tf2_ros/message_filter.h"
@@ -356,6 +351,10 @@ namespace realsense2_camera
         float _camera_link_x;
         float _camera_link_y;
         float _camera_link_z;
+        // Stereo color publish rate (if different from default FPS)
+        double _stereo_color_publish_rate;
+        // Stereo depth publish rate (if different from default FPS)
+        double _stereo_depth_publish_rate;
         // Imu accel vars
         std::vector<double> _imu_accel_x_vector;
         std::vector<double> _imu_accel_y_vector;
@@ -396,6 +395,27 @@ namespace realsense2_camera
         //publish camera imu angles
         std::array<double, 2> getImuPitchandRoll();
         void ChassisTransformTmrCb();
+
+        // Stereo color publish rate control
+        rclcpp::TimerBase::SharedPtr _stereo_color_publish_timer;
+        std::mutex _stereo_color_frame_mutex;
+        sensor_msgs::msg::Image::UniquePtr _latest_stereo_color_frame;
+        bool _stereo_color_frame_available;
+        void stereoColorPublishTimerCallback();
+
+        // Stereo depth publish rate control
+        rclcpp::TimerBase::SharedPtr _stereo_depth_publish_timer;
+        std::mutex _stereo_depth_frame_mutex;
+        sensor_msgs::msg::Image::UniquePtr _latest_stereo_depth_frame;
+        bool _stereo_depth_frame_available;
+        void stereoDepthPublishTimerCallback();
+
+        // Stereo pointcloud publish rate control
+        rclcpp::TimerBase::SharedPtr _stereo_pointcloud_publish_timer;
+        std::mutex _stereo_pointcloud_frame_mutex;
+        sensor_msgs::msg::PointCloud2::UniquePtr _latest_stereo_pointcloud_frame;
+        bool _stereo_pointcloud_frame_available;
+        void stereoPointcloudPublishTimerCallback();
 
     };//end class
 }

@@ -140,7 +140,7 @@ void reverse_memcpy(unsigned char* dst, const unsigned char* src, size_t n)
 
 }
 
-void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id)
+void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id, bool publish_immediately)
 {
     // moved down so the get coords service can work
     // {
@@ -298,7 +298,7 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
     }
     {
         std::lock_guard<std::mutex> lock_guard(_mutex_publisher);
-        if (_pointcloud_publisher)
+        if (_pointcloud_publisher && publish_immediately)
             _pointcloud_publisher->publish(_msg_pointcloud);
     }
 }
