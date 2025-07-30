@@ -209,8 +209,8 @@ void BaseRealSenseNode::stereoDepthPublishTimerCallback()
     if (_stereo_depth_frame_available && _latest_stereo_depth_frame)
     {
         // Find the depth stream publisher
-        auto depth_publisher_it = _image_publishers.find(DEPTH);
-        if (depth_publisher_it != _image_publishers.end())
+        auto depth_publisher_it = _depth_aligned_image_publishers.find(COLOR);
+        if (depth_publisher_it != _depth_aligned_image_publishers.end())
         {
             // Create a copy of the latest frame for publishing
             auto frame_to_publish = std::make_unique<sensor_msgs::msg::Image>(*_latest_stereo_depth_frame);
@@ -1218,6 +1218,10 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
             // Stream is already disabled.
             return;
         }
+    // We need to check for depth image this way since the it is sent as a color stream
+    bool is_depth_stream = f.is<rs2::depth_frame>() && stream == COLOR;
+    bool is_color_stream = !f.is<rs2::depth_frame>() && stream == COLOR;
+
     auto& info_publisher = info_publishers.at(stream);
     auto& image_publisher = image_publishers.at(stream);
     if(0 != info_publisher->get_subscription_count() ||
@@ -1253,7 +1257,7 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         img->step = width * bpp;
 
         // Store latest stereo color frame if custom publish rate is enabled
-        if (stream == COLOR && _stereo_color_publish_rate > 0.0)
+        if (is_color_stream && _stereo_color_publish_rate > 0.0)
         {
             std::lock_guard<std::mutex> lock(_stereo_color_frame_mutex);
             _latest_stereo_color_frame = std::make_unique<sensor_msgs::msg::Image>(*img);
@@ -1261,7 +1265,7 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         }
 
         // Store latest stereo depth frame if custom publish rate is enabled
-        if (stream == DEPTH && _stereo_depth_publish_rate > 0.0)
+        if (is_depth_stream && _stereo_depth_publish_rate > 0.0)
         {
             std::lock_guard<std::mutex> lock(_stereo_depth_frame_mutex);
             _latest_stereo_depth_frame = std::make_unique<sensor_msgs::msg::Image>(*img);
@@ -1272,13 +1276,21 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         sensor_msgs::msg::Image* msg_address = img.get();
         
         // Only publish immediately if custom publish rate is not enabled for color or depth stream
-        if (!(stream == COLOR && _stereo_color_publish_rate > 0.0) && 
-            !(stream == DEPTH && _stereo_depth_publish_rate > 0.0))
+        if ((is_color_stream && _stereo_color_publish_rate <= 0.0) || 
+            (is_depth_stream && _stereo_depth_publish_rate <= 0.0))
         {
             image_publisher->publish(std::move(img));
         }
 
         ROS_DEBUG_STREAM(rs2_stream_to_string(f.get_profile().stream_type()) << " stream published, message address: " << std::hex << msg_address);
+    }
+    else {
+        if (is_color_stream) {
+            _stereo_color_frame_available = false;
+        }
+        else if (is_depth_stream) {
+            _stereo_depth_frame_available = false;
+        }
     }
     if (is_publishMetadata)
     {
