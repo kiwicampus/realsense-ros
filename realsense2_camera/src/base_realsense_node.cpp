@@ -195,10 +195,9 @@ void BaseRealSenseNode::stereoColorPublishTimerCallback()
         auto color_publisher_it = _image_publishers.find(COLOR);
         if (color_publisher_it != _image_publishers.end())
         {
-            // Create a copy of the latest frame for publishing
-            auto frame_to_publish = std::make_unique<sensor_msgs::msg::Image>(*_latest_stereo_color_frame);
-            frame_to_publish->header.stamp = _node.now();
-            color_publisher_it->second->publish(std::move(frame_to_publish));
+            // Update timestamp and move the frame to avoid copying
+            _latest_stereo_color_frame->header.stamp = _node.now();
+            color_publisher_it->second->publish(std::move(_latest_stereo_color_frame));
         }
     }
 }
@@ -212,10 +211,9 @@ void BaseRealSenseNode::stereoDepthPublishTimerCallback()
         auto depth_publisher_it = _depth_aligned_image_publishers.find(COLOR);
         if (depth_publisher_it != _depth_aligned_image_publishers.end())
         {
-            // Create a copy of the latest frame for publishing
-            auto frame_to_publish = std::make_unique<sensor_msgs::msg::Image>(*_latest_stereo_depth_frame);
-            frame_to_publish->header.stamp = _node.now();
-            depth_publisher_it->second->publish(std::move(frame_to_publish));
+            // Update timestamp and move the frame to avoid copying
+            _latest_stereo_depth_frame->header.stamp = _node.now();
+            depth_publisher_it->second->publish(std::move(_latest_stereo_depth_frame));
         }
     }
 }
@@ -228,10 +226,9 @@ void BaseRealSenseNode::stereoPointcloudPublishTimerCallback()
         // Get the pointcloud publisher from the pc_filter
         if (_pc_filter && _pc_filter->getPointcloudPublisher())
         {
-            // Create a copy of the latest frame for publishing
-            auto frame_to_publish = std::make_unique<sensor_msgs::msg::PointCloud2>(*_latest_stereo_pointcloud_frame);
-            frame_to_publish->header.stamp = _node.now();
-            _pc_filter->getPointcloudPublisher()->publish(std::move(frame_to_publish));
+            // Update timestamp and move the frame to avoid copying
+            _latest_stereo_pointcloud_frame->header.stamp = _node.now();
+            _pc_filter->getPointcloudPublisher()->publish(std::move(_latest_stereo_pointcloud_frame));
         }
     }
 }
@@ -1131,7 +1128,8 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
     if (_stereo_depth_publish_rate > 0.0)
     {
         std::lock_guard<std::mutex> lock(_stereo_pointcloud_frame_mutex);
-        _latest_stereo_pointcloud_frame = std::make_unique<sensor_msgs::msg::PointCloud2>(_pc_filter->getLatestPointcloudMessage());
+        // Move the frame instead of copying to avoid data duplication
+        _latest_stereo_pointcloud_frame = std::move(_pc_filter->getLatestPointcloudMessage());
         _stereo_pointcloud_frame_available = true;
     }
 }
@@ -1260,7 +1258,8 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         if (is_color_stream && _stereo_color_publish_rate > 0.0)
         {
             std::lock_guard<std::mutex> lock(_stereo_color_frame_mutex);
-            _latest_stereo_color_frame = std::make_unique<sensor_msgs::msg::Image>(*img);
+            // Move the frame instead of copying to avoid data duplication
+            _latest_stereo_color_frame = std::move(img);
             _stereo_color_frame_available = true;
         }
 
@@ -1268,7 +1267,8 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         if (is_depth_stream && _stereo_depth_publish_rate > 0.0)
         {
             std::lock_guard<std::mutex> lock(_stereo_depth_frame_mutex);
-            _latest_stereo_depth_frame = std::make_unique<sensor_msgs::msg::Image>(*img);
+            // Move the frame instead of copying to avoid data duplication
+            _latest_stereo_depth_frame = std::move(img);
             _stereo_depth_frame_available = true;
         }
 
