@@ -207,7 +207,7 @@ void BaseRealSenseNode::stereoDepthPublishTimerCallback()
     std::lock_guard<std::mutex> lock(_stereo_depth_frame_mutex);
     if (_stereo_depth_frame_available && _latest_stereo_depth_frame)
     {
-        // Find the depth stream publisher
+        // Find the depth stream publisher, the COLOR publisher is the one that is aligned to the rgb image
         auto depth_publisher_it = _depth_aligned_image_publishers.find(COLOR);
         if (depth_publisher_it != _depth_aligned_image_publishers.end())
         {
