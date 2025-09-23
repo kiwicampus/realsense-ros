@@ -64,7 +64,7 @@ def test_launch_logic():
         from config.configs import configs as realsense_configs
         
         # Test with different robot types
-        test_configs = ['default', 'bimanual-i2rt']
+        test_configs = ['default', 'bimanual_i2rt']
         connected_serials = test_serial_detection()
         
         for robot_type in test_configs:
