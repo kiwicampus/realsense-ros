@@ -1,0 +1,11 @@
+# RealSense Global Settings Configuration
+# This file controls global behavior of RealSense camera nodes
+
+# Lifecycle Node Configuration
+# Set to true to use ROS2 Lifecycle Nodes instead of regular nodes
+# Lifecycle nodes provide better state management and controlled startup/shutdown
+use_lifecycle_node: false
+
+# Future settings can be added here...
+# sync_enabled: false
+# default_log_level: info
