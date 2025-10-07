@@ -116,12 +116,14 @@ def setup_multi_camera_launch(context, params):
         # Use lower resolution to avoid USB bandwidth conflicts with multiple cameras
         camera_params['depth_module.depth_profile'] = '640,480,15'
         camera_params['rgb_camera.color_profile'] = '640,480,15'
+        # Enable aligned depth for better depth-color alignment
+        camera_params['align_depth.enable'] = True
         # Note: serial_no is handled separately in the parameter list to ensure proper typing
         
         # Apply any launch configuration overrides (convert LaunchConfiguration to actual values)
         for param_name, launch_config in params.items():
             if param_name not in ['camera_name', 'camera_namespace', 'serial_no', 
-                                'depth_module.depth_profile', 'rgb_camera.color_profile']:
+                                'depth_module.depth_profile', 'rgb_camera.color_profile', 'align_depth.enable']:
                 # These will be evaluated at launch time
                 camera_params[param_name] = launch_config
         
