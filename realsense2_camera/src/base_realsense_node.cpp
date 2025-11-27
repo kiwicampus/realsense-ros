@@ -2,6 +2,7 @@
 // Copyright(c) 2022 Intel Corporation. All Rights Reserved.
 
 #include "../include/base_realsense_node.h"
+#include "../include/opencv_depth_filter.h"
 #include "assert.h"
 #include <algorithm>
 #include <mutex>
@@ -265,6 +266,9 @@ void BaseRealSenseNode::setupFilters()
 
     _pc_filter = std::make_shared<PointcloudFilter>(std::make_shared<rs2::pointcloud>(), _node, _parameters, _logger);
     _filters.push_back(_pc_filter);
+
+    // Add OpenCV depth filter (processes depth frames using OpenCV operations)
+    _filters.push_back(std::make_shared<OpenCVDepthFilterWrapper>(_parameters, _logger));
 }
 
 cv::Mat& BaseRealSenseNode::fix_depth_scale(const cv::Mat& from_image, cv::Mat& to_image)
