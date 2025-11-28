@@ -7,6 +7,7 @@
 #include <memory>
 #include <sensor_msgs/image_encodings.hpp>
 #include <vector>
+#include "constants.h"
 
 using namespace realsense2_camera;
 
@@ -15,16 +16,16 @@ using namespace realsense2_camera;
 OpenCVDepthFilterWrapper::OpenCVDepthFilterWrapper(std::shared_ptr<Parameters> parameters, rclcpp::Logger logger,
                                                    bool is_enabled)
     : NamedFilter(std::make_shared<rs2::pointcloud>(), parameters, logger, is_enabled, false)
-    , _use_bilateral(false)
-    , _bilateral_d(5)
-    , _bilateral_sigma_color(50.0)
-    , _bilateral_sigma_space(50.0)
-    , _use_median(false)
-    , _median_kernel_size(5)
-    , _use_morphology(false)
+    , _use_bilateral(true)          // Enabled by default for edge-preserving noise reduction
+    , _bilateral_d(9)               // Larger d for more noticeable smoothing
+    , _bilateral_sigma_color(75.0)  // Higher sigma for more smoothing
+    , _bilateral_sigma_space(75.0)  // Higher sigma for more smoothing
+    , _use_median(true)             // Enabled by default for salt-and-pepper noise removal
+    , _median_kernel_size(7)        // Larger kernel for more noticeable effect
+    , _use_morphology(true)         // Enabled by default to fill small holes
     , _morphology_kernel_size(5)
-    , _morphology_type(0)
-    , _use_gaussian(false)
+    , _morphology_type(1)   // Closing operation to fill holes
+    , _use_gaussian(false)  // Disabled by default (bilateral is better for depth)
     , _gaussian_kernel_size(5)
     , _gaussian_sigma_x(1.0)
     , _gaussian_sigma_y(1.0)
@@ -35,6 +36,15 @@ OpenCVDepthFilterWrapper::OpenCVDepthFilterWrapper(std::shared_ptr<Parameters> p
 void OpenCVDepthFilterWrapper::setOpenCVParameters()
 {
     std::string module_name = "opencv_depth_filter";
+
+    // NOTE: The filtered depth is published on the same topics as regular depth:
+    // - /camera/depth/image_rect_raw (main depth topic - THIS IS WHERE YOU'LL SEE THE CHANGES)
+    // - /camera/aligned_depth_to_color/image_raw (if align_depth is enabled)
+    // - /camera/depth/color/points (pointcloud, if enabled)
+    // The filter processes frames in the pipeline before publishing.
+    //
+    // To visualize: Use RViz2 and subscribe to /camera/depth/image_rect_raw
+    // You should see: smoother depth, fewer holes, less noise, especially on edges
 
     // Enable parameter - use NamedFilter's parameter system
     std::string param_name = module_name + ".enable";
@@ -121,7 +131,11 @@ rs2::frame OpenCVDepthFilterWrapper::processDepthFrame(rs2::depth_frame depth_fr
     cv::Mat depth_mat = depthFrameToMat(depth_frame);
     cv::Mat processed = depth_mat.clone();
 
-    // Apply filters in sequence
+    // Apply filters in sequence:
+    // - Bilateral: Edge-preserving smoothing (reduces noise while keeping sharp edges)
+    // - Median: Removes salt-and-pepper noise (outliers)
+    // - Morphology: Fills small holes (closing) or removes small objects (opening)
+    // - Gaussian: General smoothing (can blur edges, use sparingly)
     if (_use_bilateral)
     {
         cv::bilateralFilter(processed, processed, _bilateral_d, _bilateral_sigma_color, _bilateral_sigma_space);
