@@ -85,6 +85,16 @@ void BaseRealSenseNode::getParameters()
     param_name = std::string("camera_link_z");
     _camera_link_z =  _parameters->setParam<double>(param_name, CAMERA_LINK_Z);
     _parameters_names.push_back(param_name);
+
+    // Kiwi added: stereo color publish rate parameter
+    param_name = std::string("stereo_color_publish_rate");
+    _stereo_color_publish_rate = _parameters->setParam<double>(param_name, -1.0); // -1 means use default FPS
+    _parameters_names.push_back(param_name);
+
+    // Kiwi added: stereo depth publish rate parameter
+    param_name = std::string("stereo_depth_publish_rate");
+    _stereo_depth_publish_rate = _parameters->setParam<double>(param_name, -1.0); // -1 means use default FPS
+    _parameters_names.push_back(param_name);
 }
 
 void BaseRealSenseNode::setDynamicParams()

@@ -43,7 +43,9 @@ namespace realsense2_camera
             PointcloudFilter(std::shared_ptr<rs2::filter> filter, rclcpp::Node& node, std::shared_ptr<Parameters> parameters, rclcpp::Logger logger, bool is_enabled=false);
         
             void setPublisher();
-            void Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id);
+            void Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id, bool publish_immediately = true);
+            rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr getPointcloudPublisher() { return _pointcloud_publisher; }
+            sensor_msgs::msg::PointCloud2::UniquePtr getLatestPointcloudMessage() { return std::make_unique<sensor_msgs::msg::PointCloud2>(_msg_pointcloud); }
 
             // KIWI: Make it public so we can get it in the get coords service call
             sensor_msgs::msg::PointCloud2 _msg_pointcloud;

@@ -86,7 +86,12 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     _is_initialized_time_base(false),
     _sync_frames(SYNC_FRAMES),
     _is_profile_changed(false),
-    _is_align_depth_changed(false)
+    _is_align_depth_changed(false),
+    _stereo_color_publish_rate(-1.0),
+    _stereo_color_frame_available(false),
+    _stereo_depth_publish_rate(-1.0),
+    _stereo_depth_frame_available(false),
+    _stereo_pointcloud_frame_available(false)
 {
 
     // Kiwi added: allow static tf with intra process
@@ -147,7 +152,85 @@ void BaseRealSenseNode::publishTopics()
         _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
         _stream_intrinsics[COLOR].width, _stream_intrinsics[COLOR].height);
     }
+
+    // Initialize stereo color publish timer if custom rate is enabled
+    if (_stereo_color_publish_rate > 0.0)
+    {
+        ROS_INFO_STREAM("Stereo color publish rate set to " << _stereo_color_publish_rate << " Hz");
+        _stereo_color_publish_timer = _node.create_wall_timer(
+            std::chrono::milliseconds(static_cast<int>(1000.0 / _stereo_color_publish_rate)),
+            std::bind(&BaseRealSenseNode::stereoColorPublishTimerCallback, this)
+        );
+    }
+
+    // Initialize stereo depth publish timer if custom rate is enabled
+    if (_stereo_depth_publish_rate > 0.0)
+    {
+        ROS_INFO_STREAM("Stereo depth publish rate set to " << _stereo_depth_publish_rate << " Hz");
+        _stereo_depth_publish_timer = _node.create_wall_timer(
+            std::chrono::milliseconds(static_cast<int>(1000.0 / _stereo_depth_publish_rate)),
+            std::bind(&BaseRealSenseNode::stereoDepthPublishTimerCallback, this)
+        );
+    }
+
+    // Initialize stereo pointcloud publish timer if custom rate is enabled
+    if (_stereo_depth_publish_rate > 0.0)
+    {
+        ROS_INFO_STREAM("Stereo pointcloud publish rate set to " << _stereo_depth_publish_rate << " Hz");
+        _stereo_pointcloud_publish_timer = _node.create_wall_timer(
+            std::chrono::milliseconds(static_cast<int>(1000.0 / _stereo_depth_publish_rate)),
+            std::bind(&BaseRealSenseNode::stereoPointcloudPublishTimerCallback, this)
+        );
+    }
+
     ROS_INFO_STREAM("RealSense Node Is Up!");
+}
+
+void BaseRealSenseNode::stereoColorPublishTimerCallback()
+{
+    std::lock_guard<std::mutex> lock(_stereo_color_frame_mutex);
+    if (_stereo_color_frame_available && _latest_stereo_color_frame)
+    {
+        // Find the color stream publisher
+        auto color_publisher_it = _image_publishers.find(COLOR);
+        if (color_publisher_it != _image_publishers.end())
+        {
+            // Update timestamp and move the frame to avoid copying
+            _latest_stereo_color_frame->header.stamp = _node.now();
+            color_publisher_it->second->publish(std::move(_latest_stereo_color_frame));
+        }
+    }
+}
+
+void BaseRealSenseNode::stereoDepthPublishTimerCallback()
+{
+    std::lock_guard<std::mutex> lock(_stereo_depth_frame_mutex);
+    if (_stereo_depth_frame_available && _latest_stereo_depth_frame)
+    {
+        // Find the depth stream publisher, the COLOR publisher is the one that is aligned to the rgb image
+        auto depth_publisher_it = _depth_aligned_image_publishers.find(COLOR);
+        if (depth_publisher_it != _depth_aligned_image_publishers.end())
+        {
+            // Update timestamp and move the frame to avoid copying
+            _latest_stereo_depth_frame->header.stamp = _node.now();
+            depth_publisher_it->second->publish(std::move(_latest_stereo_depth_frame));
+        }
+    }
+}
+
+void BaseRealSenseNode::stereoPointcloudPublishTimerCallback()
+{
+    std::lock_guard<std::mutex> lock(_stereo_pointcloud_frame_mutex);
+    if (_stereo_pointcloud_frame_available && _latest_stereo_pointcloud_frame)
+    {
+        // Get the pointcloud publisher from the pc_filter
+        if (_pc_filter && _pc_filter->getPointcloudPublisher())
+        {
+            // Update timestamp and move the frame to avoid copying
+            _latest_stereo_pointcloud_frame->header.stamp = _node.now();
+            _pc_filter->getPointcloudPublisher()->publish(std::move(_latest_stereo_pointcloud_frame));
+        }
+    }
 }
 
 void BaseRealSenseNode::setupFilters()
@@ -1034,7 +1117,21 @@ void BaseRealSenseNode::publishDynamicTransforms()
 void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset)
 {
     std::string frame_id = (_align_depth_filter->is_enabled() ? OPTICAL_FRAME_ID(COLOR) : OPTICAL_FRAME_ID(DEPTH));
-    _pc_filter->Publish(pc, t, frameset, frame_id);
+    
+    // Determine if we should publish immediately based on custom publish rate
+    bool publish_immediately = !(_stereo_depth_publish_rate > 0.0);
+    
+    // Publish the pointcloud (this will also prepare the message)
+    _pc_filter->Publish(pc, t, frameset, frame_id, publish_immediately);
+    
+    // Store latest stereo pointcloud frame if custom publish rate is enabled
+    if (_stereo_depth_publish_rate > 0.0)
+    {
+        std::lock_guard<std::mutex> lock(_stereo_pointcloud_frame_mutex);
+        // Move the frame instead of copying to avoid data duplication
+        _latest_stereo_pointcloud_frame = std::move(_pc_filter->getLatestPointcloudMessage());
+        _stereo_pointcloud_frame_available = true;
+    }
 }
 
 
@@ -1119,6 +1216,10 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
             // Stream is already disabled.
             return;
         }
+    // We need to check for depth image this way since the it is sent as a color stream
+    bool is_depth_stream = f.is<rs2::depth_frame>() && stream == COLOR;
+    bool is_color_stream = !f.is<rs2::depth_frame>() && stream == COLOR;
+
     auto& info_publisher = info_publishers.at(stream);
     auto& image_publisher = image_publishers.at(stream);
     if(0 != info_publisher->get_subscription_count() ||
@@ -1152,11 +1253,44 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         img->width = width;
         img->is_bigendian = false;
         img->step = width * bpp;
+
+        // Store latest stereo color frame if custom publish rate is enabled
+        if (is_color_stream && _stereo_color_publish_rate > 0.0)
+        {
+            std::lock_guard<std::mutex> lock(_stereo_color_frame_mutex);
+            // Move the frame instead of copying to avoid data duplication
+            _latest_stereo_color_frame = std::move(img);
+            _stereo_color_frame_available = true;
+        }
+
+        // Store latest stereo depth frame if custom publish rate is enabled
+        if (is_depth_stream && _stereo_depth_publish_rate > 0.0)
+        {
+            std::lock_guard<std::mutex> lock(_stereo_depth_frame_mutex);
+            // Move the frame instead of copying to avoid data duplication
+            _latest_stereo_depth_frame = std::move(img);
+            _stereo_depth_frame_available = true;
+        }
+
         // Transfer the unique pointer ownership to the RMW
         sensor_msgs::msg::Image* msg_address = img.get();
-        image_publisher->publish(std::move(img));
+        
+        // Only publish immediately if custom publish rate is not enabled for color or depth stream
+        if ((is_color_stream && _stereo_color_publish_rate <= 0.0) || 
+            (is_depth_stream && _stereo_depth_publish_rate <= 0.0))
+        {
+            image_publisher->publish(std::move(img));
+        }
 
         ROS_DEBUG_STREAM(rs2_stream_to_string(f.get_profile().stream_type()) << " stream published, message address: " << std::hex << msg_address);
+    }
+    else {
+        if (is_color_stream) {
+            _stereo_color_frame_available = false;
+        }
+        else if (is_depth_stream) {
+            _stereo_depth_frame_available = false;
+        }
     }
     if (is_publishMetadata)
     {
