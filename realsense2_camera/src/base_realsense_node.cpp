@@ -1286,6 +1286,11 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         {
             image_publisher->publish(std::move(img));
         }
+        else if (!is_color_stream && !is_depth_stream)
+        {
+            // Publish infra and other streams immediately (no custom publish rate for these)
+            image_publisher->publish(std::move(img));
+        }
 
         ROS_DEBUG_STREAM(rs2_stream_to_string(f.get_profile().stream_type()) << " stream published, message address: " << std::hex << msg_address);
     }
