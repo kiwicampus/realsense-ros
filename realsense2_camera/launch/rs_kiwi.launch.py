@@ -76,7 +76,7 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'fisheye_qos',                  'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
                            {'name': 'infra1_qos',                   'default': 'SENSOR_DATA', 'description': 'QoS profile name'},
                            {'name': 'infra2_qos',                   'default': 'SENSOR_DATA', 'description': 'QoS profile name'},
-                           {'name': 'depth_module.pointcloud_qos',  'default': 'SENSOR_DATA', 'description': 'QoS profile name'},
+                           {'name': 'pointcloud.pointcloud_qos',  'default': 'SENSOR_DATA', 'description': 'QoS profile name'},
                             # filters and depth performance
                             {'name': 'rgb_camera.power_line_frequency',               'default': '2', 'description': 'emitter always on'},
                             {'name': 'depth_module.emitter_always_on',               'default': 'true', 'description': 'emitter always on'}, 
