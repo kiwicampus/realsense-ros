@@ -1190,13 +1190,23 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
     unsigned int width = 0;
     unsigned int height = 0;
     unsigned int bpp = 1;
+
+    if(!f) return;
+
     if (f.is<rs2::video_frame>())
     {
         auto timage = f.as<rs2::video_frame>();
         width = timage.get_width();
         height = timage.get_height();
         bpp = timage.get_bytes_per_pixel();
+
+        // Check if the frame is valid
+        if (width == 0 || height == 0 || bpp == 0) return;
+        if (!f.get_data()) return;
     }
+
+   
+
     auto& image = images[stream];
 
     if (image.size() != cv::Size(width, height) || image.depth() != _image_format[bpp])
