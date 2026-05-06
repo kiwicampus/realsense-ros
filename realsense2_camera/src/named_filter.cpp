@@ -156,8 +156,8 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
     if (use_texture)
     {
         std::set<rs2_format> available_formats{ rs2_format::RS2_FORMAT_RGB8, rs2_format::RS2_FORMAT_Y8 };
-        
-        texture_frame_itr = std::find_if(frameset.begin(), frameset.end(), [&texture_source_id, &available_formats] (rs2::frame f) 
+
+        texture_frame_itr = std::find_if(frameset.begin(), frameset.end(), [&texture_source_id, &available_formats] (rs2::frame f)
                                 {return (rs2_stream(f.get_profile().stream_type()) == texture_source_id) &&
                                             (available_formats.find(f.get_profile().format()) != available_formats.end()); });
         if (texture_frame_itr == frameset.end())
@@ -180,17 +180,19 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
 
     _depth_intrin = pc.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
 
-    sensor_msgs::PointCloud2Modifier modifier(_msg_pointcloud);
-    modifier.setPointCloud2FieldsByString(1, "xyz");    
+    auto msg_pointcloud = std::make_unique<sensor_msgs::msg::PointCloud2>();
+
+    sensor_msgs::PointCloud2Modifier modifier(*msg_pointcloud);
+    modifier.setPointCloud2FieldsByString(1, "xyz");
     modifier.resize(pc.size());
 
-    _msg_pointcloud.width = _depth_intrin.width / _pc_subsample_fct;
-    _msg_pointcloud.height = _depth_intrin.height / _pc_subsample_fct;
-    _msg_pointcloud.is_dense = !_ordered_pc;
+    msg_pointcloud->width = _depth_intrin.width / _pc_subsample_fct;
+    msg_pointcloud->height = _depth_intrin.height / _pc_subsample_fct;
+    msg_pointcloud->is_dense = !_ordered_pc;
 
     //The real world coords are obtained adding the requested pixel index to the pointer that points to the pixel with coords 0,0
     _vertex = const_cast<rs2::vertex*>(pc.get_vertices());
-    _msg_pointcloud.header.stamp = t;
+    msg_pointcloud->header.stamp = t;
 
     //the condition on top is translated here to avoid the for loop if there are no pointcloud subscriber
     {
@@ -221,20 +223,20 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
             default:
                 throw std::runtime_error("Unhandled texture format passed in pointcloud " + std::to_string(texture_frame.get_profile().format()));
         }
-        _msg_pointcloud.point_step = addPointField(_msg_pointcloud, format_str.c_str(), 1, sensor_msgs::msg::PointField::FLOAT32, _msg_pointcloud.point_step);
-        _msg_pointcloud.row_step = _msg_pointcloud.width * _msg_pointcloud.point_step;
-        _msg_pointcloud.data.resize(_msg_pointcloud.height * _msg_pointcloud.row_step);
+        msg_pointcloud->point_step = addPointField(*msg_pointcloud, format_str.c_str(), 1, sensor_msgs::msg::PointField::FLOAT32, msg_pointcloud->point_step);
+        msg_pointcloud->row_step = msg_pointcloud->width * msg_pointcloud->point_step;
+        msg_pointcloud->data.resize(msg_pointcloud->height * msg_pointcloud->row_step);
 
-        sensor_msgs::PointCloud2Iterator<float>iter_x(_msg_pointcloud, "x");
-        sensor_msgs::PointCloud2Iterator<float>iter_y(_msg_pointcloud, "y");
-        sensor_msgs::PointCloud2Iterator<float>iter_z(_msg_pointcloud, "z");
-        sensor_msgs::PointCloud2Iterator<uint8_t>iter_color(_msg_pointcloud, format_str);
+        sensor_msgs::PointCloud2Iterator<float>iter_x(*msg_pointcloud, "x");
+        sensor_msgs::PointCloud2Iterator<float>iter_y(*msg_pointcloud, "y");
+        sensor_msgs::PointCloud2Iterator<float>iter_z(*msg_pointcloud, "z");
+        sensor_msgs::PointCloud2Iterator<uint8_t>iter_color(*msg_pointcloud, format_str);
         color_point = pc.get_texture_coordinates();
 
         float color_pixel[2];
-        for(size_t y=0; y<_msg_pointcloud.height; y++){
-            for(size_t x=0; x<_msg_pointcloud.width; x++){
-                int current_vertex_index = (y*_msg_pointcloud.width*resize_fct_2 + x*_pc_subsample_fct);
+        for(size_t y=0; y<msg_pointcloud->height; y++){
+            for(size_t x=0; x<msg_pointcloud->width; x++){
+                int current_vertex_index = (y*msg_pointcloud->width*resize_fct_2 + x*_pc_subsample_fct);
                 float i((color_point+current_vertex_index)->u);
                 float j((color_point+current_vertex_index)->v);
                 bool valid_color_pixel(i >= 0.f && i <=1.f && j >= 0.f && j <=1.f);
@@ -265,16 +267,16 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
     else
     {
         std::string format_str = "intensity";
-        _msg_pointcloud.row_step = _msg_pointcloud.width * _msg_pointcloud.point_step;
-        _msg_pointcloud.data.resize(_msg_pointcloud.height * _msg_pointcloud.row_step);
+        msg_pointcloud->row_step = msg_pointcloud->width * msg_pointcloud->point_step;
+        msg_pointcloud->data.resize(msg_pointcloud->height * msg_pointcloud->row_step);
 
-        sensor_msgs::PointCloud2Iterator<float>iter_x(_msg_pointcloud, "x");
-        sensor_msgs::PointCloud2Iterator<float>iter_y(_msg_pointcloud, "y");
-        sensor_msgs::PointCloud2Iterator<float>iter_z(_msg_pointcloud, "z");
+        sensor_msgs::PointCloud2Iterator<float>iter_x(*msg_pointcloud, "x");
+        sensor_msgs::PointCloud2Iterator<float>iter_y(*msg_pointcloud, "y");
+        sensor_msgs::PointCloud2Iterator<float>iter_z(*msg_pointcloud, "z");
 
-        for(size_t y=0; y<_msg_pointcloud.height; y++){
-            for(size_t x=0; x<_msg_pointcloud.width; x++){
-                int current_vertex_index = (y*_msg_pointcloud.width*resize_fct_2 + x*_pc_subsample_fct);
+        for(size_t y=0; y<msg_pointcloud->height; y++){
+            for(size_t x=0; x<msg_pointcloud->width; x++){
+                int current_vertex_index = (y*msg_pointcloud->width*resize_fct_2 + x*_pc_subsample_fct);
                 bool valid_pixel((vertex + current_vertex_index)->z > 0);
                 if (valid_pixel || _ordered_pc)
                 {
@@ -287,19 +289,26 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
             }
         }
     }
-    _msg_pointcloud.header.stamp = t;
-    _msg_pointcloud.header.frame_id = frame_id;
+    msg_pointcloud->header.stamp = t;
+    msg_pointcloud->header.frame_id = frame_id;
     if (!_ordered_pc)
     {
-        _msg_pointcloud.width = valid_count;
-        _msg_pointcloud.height = 1;
-        _msg_pointcloud.is_dense = true;
+        msg_pointcloud->width = valid_count;
+        msg_pointcloud->height = 1;
+        msg_pointcloud->is_dense = true;
         modifier.resize(valid_count);
     }
+    if (publish_immediately)
     {
         std::lock_guard<std::mutex> lock_guard(_mutex_publisher);
-        if (_pointcloud_publisher && publish_immediately)
-            _pointcloud_publisher->publish(_msg_pointcloud);
+        if (_pointcloud_publisher)
+            _pointcloud_publisher->publish(std::move(msg_pointcloud));
+    }
+    else
+    {
+        // Cache for getLatestPointcloudMessage() — used when the deferred-publish
+        // path is enabled (_stereo_depth_publish_rate > 0).
+        _msg_pointcloud = std::move(*msg_pointcloud);
     }
 }
 
