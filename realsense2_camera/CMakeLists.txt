@@ -94,6 +94,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(cv_bridge REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
@@ -132,6 +133,7 @@ set(SOURCES
     src/named_filter.cpp
     src/profile_manager.cpp
     src/image_publisher.cpp
+    src/opencv_depth_filter.cpp
   )
 
 if(NOT DEFINED ENV{ROS_DISTRO})
@@ -181,7 +183,8 @@ set(INCLUDES
     include/named_filter.h
     include/ros_param_backend.h
     include/profile_manager.h
-    include/image_publisher.h)
+    include/image_publisher.h
+    include/opencv_depth_filter.h)
 
 
 if (BUILD_TOOLS)
@@ -201,6 +204,7 @@ add_library(${PROJECT_NAME} SHARED
 
 target_link_libraries(${PROJECT_NAME}
     ${realsense2_LIBRARY}
+    ${OpenCV_LIBS}
     )
 
 set(dependencies

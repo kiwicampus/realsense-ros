@@ -91,6 +91,7 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                             {'name': 'hole_filling_filter.enable',               'default': 'true', 'description': 'emitter always on'},
                             # {'name': 'disparity_filter.enable',               'default': 'true', 'description': 'emitter always on'},
                             {'name': 'disparity_to_depth.enable',               'default': 'true', 'description': 'emitter always on'},
+                            {'name': 'opencv_depth_filter.enable',             'default': 'true', 'description': 'enable OpenCV depth filter'},
                           ]
 
 def declare_configurable_parameters(parameters):
