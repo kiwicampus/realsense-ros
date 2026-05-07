@@ -28,6 +28,7 @@
 #include <diagnostic_updater/diagnostic_updater.hpp>
 #include <diagnostic_updater/publisher.hpp>
 #include <std_srvs/srv/empty.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include "realsense2_camera_msgs/msg/imu_info.hpp"
 #include "realsense2_camera_msgs/msg/extrinsics.hpp"
 #include "realsense2_camera_msgs/msg/metadata.hpp"
@@ -47,6 +48,7 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <geometry_msgs/msg/quaternion.hpp>
 #include <nav_msgs/msg/grid_cells.hpp>
 
 #if defined(HUMBLE) || defined(IRON) || defined(JAZZY) || defined(FOXY) 
@@ -57,6 +59,10 @@
 
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <realsense2_camera_srvs/srv/coordinate_req.hpp>
+#include <realsense2_camera_srvs/srv/pixel_req.hpp>
 #include <eigen3/Eigen/Geometry>
 #include <condition_variable>
 
@@ -396,6 +402,40 @@ namespace realsense2_camera
         bool _is_depth_enabled;
         bool _is_accel_enabled;
         bool _is_gyro_enabled;
+        // Kiwibot: optional throttling for color, depth-aligned-to-color, and pointcloud.
+        // Negative or zero means no throttling (publish at sensor FPS). Used to lower
+        // bandwidth/CPU during recording. Suppress-only model: never republishes a frame,
+        // never republishes if the camera stalls; effective rate is min(camera_fps, target).
+        double _stereo_color_publish_rate = -1.0;
+        double _stereo_depth_publish_rate = -1.0;
+        std::atomic<int64_t> _last_color_publish_ns{0};
+        std::atomic<int64_t> _last_depth_publish_ns{0};
+        std::atomic<int64_t> _last_pointcloud_publish_ns{0};
+        // Returns true if rate<=0 (no throttling) or enough time has elapsed since last publish.
+        bool shouldPublishStream(double rate, std::atomic<int64_t>& last_ns);
+
+        // Kiwibot: IMU-derived camera orientation publishing for stereo calibration.
+        std::vector<double> _imu_accel_x_vector;
+        std::vector<double> _imu_accel_y_vector;
+        std::vector<double> _imu_accel_z_vector;
+        bool _imu_accel_initiated = false;
+        rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr _cam_imu_angles_publisher;
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _calibrate_imu_srv;
+        std::array<double, 2> getImuPitchandRoll();
+        void calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                              std_srvs::srv::Trigger::Response::SharedPtr res);
+
+        // Kiwibot: pixel→3D coords service used by navigation_tools, debug_tools, etc.
+        std::unique_ptr<tf2_ros::Buffer> _buffer_tf2;
+        std::shared_ptr<tf2_ros::TransformListener> _listener_tf2;
+        rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
+        void get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req,
+                           realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
+
+        // Kiwibot: 3D point→pixel projection service.
+        rclcpp::Service<realsense2_camera_srvs::srv::PixelReq>::SharedPtr _get_pixel_srv;
+        void get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req,
+                          realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res);
         bool _pointcloud;
         imu_sync_method _imu_sync_method;
         stream_index_pair _pointcloud_texture;

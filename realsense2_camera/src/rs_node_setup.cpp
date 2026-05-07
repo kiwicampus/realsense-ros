@@ -383,10 +383,22 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
     {
         rmw_qos_profile_t qos = _use_intra_process ? qos_string_to_qos(DEFAULT_QOS) : qos_string_to_qos(HID_QOS);
         
-        _synced_imu_publisher = std::make_shared<SyncedImuPublisher>(_node.create_publisher<sensor_msgs::msg::Imu>("~/imu", 
+        _synced_imu_publisher = std::make_shared<SyncedImuPublisher>(_node.create_publisher<sensor_msgs::msg::Imu>("~/imu",
                                                         rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(qos), qos)));
     }
 
+    // Kiwibot: latched topic consumed by transform_frames for stereo TF calibration persisted in Firebase.
+    // Latched (TransientLocal+Reliable) QoS is incompatible with intra-process comms, so disable
+    // IPC on this publisher so the latch survives even when the node is run inside a composable container.
+    if (!_cam_imu_angles_publisher)
+    {
+        rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
+        options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+        _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>(
+            "camera_imu_angles",
+            rclcpp::QoS(1).keep_all().transient_local().reliable(),
+            options);
+    }
 }
 
 void BaseRealSenseNode::startRGBDPublisherIfNeeded()
@@ -566,6 +578,27 @@ void BaseRealSenseNode::publishServices()
             [&](const std_srvs::srv::Empty::Request::SharedPtr req,
                         std_srvs::srv::Empty::Response::SharedPtr res)
                         {handleHWReset(req, res);});
+
+    // Kiwibot: triggered by webclient operator to recompute camera_imu_angles from accel.
+    _calibrate_imu_srv = _node.create_service<std_srvs::srv::Trigger>(
+            "calibrate_imu",
+            [&](const std_srvs::srv::Trigger::Request::SharedPtr req,
+                        std_srvs::srv::Trigger::Response::SharedPtr res)
+                        {calibrate_imu_cb(req, res);});
+
+    // Kiwibot: pixel→3D coords lookup against the latest pointcloud frame.
+    _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
+            "get_coords",
+            [&](const realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req,
+                        realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res)
+                        {get_coords_cb(req, res);});
+
+    // Kiwibot: 3D point→pixel projection using the COLOR camera intrinsics.
+    _get_pixel_srv = _node.create_service<realsense2_camera_srvs::srv::PixelReq>(
+            "get_pixel",
+            [&](const realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req,
+                        realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res)
+                        {get_pixel_cb(req, res);});
 
     _device_info_srv = _node.create_service<realsense2_camera_msgs::srv::DeviceInfo>(
             "~/device_info",

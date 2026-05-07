@@ -109,11 +109,13 @@ find_package(builtin_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(realsense2_camera_msgs REQUIRED)
+find_package(realsense2_camera_srvs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(diagnostic_updater REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core)
 
@@ -289,12 +291,14 @@ set(dependencies
   rclcpp
   rclcpp_components
   realsense2_camera_msgs
+  realsense2_camera_srvs
   std_srvs
   std_msgs
   sensor_msgs
   nav_msgs
   tf2
   tf2_ros
+  tf2_geometry_msgs
   diagnostic_updater
 )
 
@@ -304,12 +308,14 @@ set (targets
   rclcpp::rclcpp
   ${RCLCPP_COMPONENT_TARGET}
   ${realsense2_camera_msgs_TARGETS}
+  ${realsense2_camera_srvs_TARGETS}
   ${std_srvs_TARGETS}
   ${std_msgs_TARGETS}
   ${SENSOR_MSGS_TARGET}
   ${nav_msgs_TARGETS}
   tf2::tf2
   tf2_ros::tf2_ros
+  ${tf2_geometry_msgs_TARGETS}
   diagnostic_updater::diagnostic_updater
 )
 

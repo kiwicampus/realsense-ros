@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <pointcloud_filter.h>
+#include <cmath>
 #include <fstream>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 
@@ -90,6 +91,16 @@ void reverse_memcpy(unsigned char* dst, const unsigned char* src, size_t n)
 
 void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id)
 {
+    // Kiwibot: refresh cache for the get_coords service before any early-return on no subscribers.
+    // rs2::points is refcounted; assignment bumps the count and keeps the vertex buffer alive.
+    {
+        std::lock_guard<std::mutex> lock(_cache_mutex);
+        _cached_points = pc;
+        _cached_intrinsics = pc.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
+        _cached_stamp = t;
+        _cached_frame_id = frame_id;
+    }
+
     {
         std::lock_guard<std::mutex> lock_guard(_mutex_publisher);
         if ((!_pointcloud_publisher) || (!(_pointcloud_publisher->get_subscription_count())))
@@ -251,4 +262,51 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
         if (_pointcloud_publisher)
             _pointcloud_publisher->publish(std::move(msg_pointcloud));
     }
+}
+
+bool PointcloudFilter::getCoordsAtPixels(const std::vector<geometry_msgs::msg::Point>& pixels,
+                                         std::vector<geometry_msgs::msg::Point>& out_coords,
+                                         std::string& source_frame_id,
+                                         rclcpp::Time& stamp)
+{
+    std::lock_guard<std::mutex> lock(_cache_mutex);
+    if (!_cached_points || _cached_points.size() == 0)
+    {
+        return false;
+    }
+    const rs2::vertex* verts = _cached_points.get_vertices();
+    const size_t n = _cached_points.size();
+    source_frame_id = _cached_frame_id;
+    stamp = _cached_stamp;
+    out_coords.clear();
+    out_coords.reserve(pixels.size());
+    for (const auto& p : pixels)
+    {
+        geometry_msgs::msg::Point coord;
+        const int x = static_cast<int>(std::trunc(p.x));
+        const int y = static_cast<int>(std::trunc(p.y));
+        if (x < 0 || x >= _cached_intrinsics.width || y < 0 || y >= _cached_intrinsics.height)
+        {
+            coord.x = -1.0; coord.y = -1.0; coord.z = -1.0;
+        }
+        else
+        {
+            const size_t idx = static_cast<size_t>(y) * static_cast<size_t>(_cached_intrinsics.width)
+                               + static_cast<size_t>(x);
+            if (idx >= n)
+            {
+                coord.x = -1.0; coord.y = -1.0; coord.z = -1.0;
+            }
+            else if (verts[idx].z > 0.0f)
+            {
+                coord.x = verts[idx].x; coord.y = verts[idx].y; coord.z = verts[idx].z;
+            }
+            else
+            {
+                coord.x = -1.0; coord.y = -1.0; coord.z = -1.0;
+            }
+        }
+        out_coords.push_back(coord);
+    }
+    return true;
 }

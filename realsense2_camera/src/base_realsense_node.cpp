@@ -15,7 +15,12 @@
 #include "../include/base_realsense_node.h"
 #include "assert.h"
 #include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <numeric>
+#include <thread>
 #include <mutex>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <rclcpp/clock.hpp>
 #include <fstream>
 #include <image_publisher.h>
@@ -137,6 +142,18 @@ BaseRealSenseNode::BaseRealSenseNode(RosNodeBase& node,
 
     initializeFormatsMaps();
     _monitor_options = {RS2_OPTION_ASIC_TEMPERATURE, RS2_OPTION_PROJECTOR_TEMPERATURE};
+
+    // Kiwibot: TF buffer for the get_coords service, which transforms cached vertices
+    // into a caller-provided frame. The TF listener subscribes with TransientLocal/Reliable
+    // QoS, which is incompatible with intra-process; disable IPC on this listener so it
+    // works whether or not the realsense node is run inside a composable container.
+    _buffer_tf2 = std::make_unique<tf2_ros::Buffer>(_node.get_clock());
+    rclcpp::SubscriptionOptionsWithAllocator<std::allocator<void>> tf_sub_options;
+    tf_sub_options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(
+        *_buffer_tf2, _node.shared_from_this(), true,
+        tf2_ros::DynamicListenerQoS(), tf2_ros::StaticListenerQoS(),
+        tf_sub_options, tf_sub_options);
 }
 
 BaseRealSenseNode::~BaseRealSenseNode()
@@ -441,6 +458,16 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
         _is_initialized_time_base = setBaseTime(frame_time, frame.get_frame_timestamp_domain());
     }
 
+    // Kiwibot: collect ACCEL samples for IMU-driven stereo calibration.
+    if (stream_index == ACCEL && !_imu_accel_initiated)
+    {
+        auto accel_reading = *(reinterpret_cast<const float3*>(frame.get_data()));
+        _imu_accel_x_vector.push_back(accel_reading.x);
+        _imu_accel_y_vector.push_back(accel_reading.y);
+        _imu_accel_z_vector.push_back(accel_reading.z);
+        if (_imu_accel_x_vector.size() > 30) _imu_accel_initiated = true;
+    }
+
     if (_synced_imu_publisher && (0 != _synced_imu_publisher->getNumSubscribers()))
     {
         auto crnt_reading = *(reinterpret_cast<const float3*>(frame.get_data()));
@@ -500,10 +527,20 @@ void BaseRealSenseNode::imu_callback(rs2::frame frame)
     {
         stream_index = MOTION;
     }
-    else 
+    else
     {
         ROS_ERROR("Unknown IMU stream type.");
         return;
+    }
+
+    // Kiwibot: collect ACCEL samples for IMU-driven stereo calibration.
+    if (stream_index == ACCEL && !_imu_accel_initiated)
+    {
+        auto accel_reading = *(reinterpret_cast<const float3*>(frame.get_data()));
+        _imu_accel_x_vector.push_back(accel_reading.x);
+        _imu_accel_y_vector.push_back(accel_reading.y);
+        _imu_accel_z_vector.push_back(accel_reading.z);
+        if (_imu_accel_x_vector.size() > 30) _imu_accel_initiated = true;
     }
 
     rclcpp::Time t(frameSystemTimeSec(frame));
@@ -560,6 +597,219 @@ void BaseRealSenseNode::imu_callback(rs2::frame frame)
         ROS_DEBUG("Publish %s stream", ros_stream_to_string(frame.get_profile().stream_type()).c_str());
     }
     publishMetadata(frame, t, OPTICAL_FRAME_ID(stream_index));
+}
+
+// Kiwibot: average buffered ACCEL samples and derive (pitch, roll) in radians.
+std::array<double, 2> BaseRealSenseNode::getImuPitchandRoll()
+{
+    if (_imu_accel_x_vector.empty())
+    {
+        return {0.0, 0.0};
+    }
+    const double accel_x = std::accumulate(_imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0)
+                           / _imu_accel_x_vector.size();
+    const double accel_y = std::accumulate(_imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0)
+                           / _imu_accel_y_vector.size();
+    const double accel_z = std::accumulate(_imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0)
+                           / _imu_accel_z_vector.size();
+    const double pitch = std::atan2(accel_z, std::sqrt(accel_x * accel_x + accel_y * accel_y));
+    const double roll  = std::atan2(-accel_x, std::sqrt(accel_y * accel_y + accel_z * accel_z));
+    return {pitch, roll};
+}
+
+// Kiwibot: re-buffer ACCEL samples and publish (pitch, roll) as a latched Quaternion.
+void BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr /*req*/,
+                                         std_srvs::srv::Trigger::Response::SharedPtr res)
+{
+    if (!_is_accel_enabled)
+    {
+        res->success = false;
+        res->message = "Camera calibration could not take place because ACCEL stream is not enabled";
+        return;
+    }
+
+    _imu_accel_initiated = false;
+    _imu_accel_x_vector.clear();
+    _imu_accel_y_vector.clear();
+    _imu_accel_z_vector.clear();
+
+    constexpr int max_wait_ms = 2000;
+    int waited_ms = 0;
+    while (!_imu_accel_initiated && waited_ms < max_wait_ms)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        waited_ms += 10;
+    }
+    if (!_imu_accel_initiated)
+    {
+        res->success = false;
+        res->message = "Camera calibration timed out waiting for ACCEL samples";
+        return;
+    }
+
+    const auto angles = getImuPitchandRoll();
+    const double cam_pitch = angles[0];
+    const double cam_roll  = angles[1];
+    RCLCPP_INFO(_logger, "Calibrated pitch [deg]: %.3f, roll [deg]: %.3f",
+                cam_pitch * 180.0 / M_PI, cam_roll * 180.0 / M_PI);
+
+    tf2::Quaternion q;
+    q.setRPY(cam_roll, cam_pitch, 0.0);
+    geometry_msgs::msg::Quaternion q_msg = tf2::toMsg(q);
+    _cam_imu_angles_publisher->publish(q_msg);
+
+    res->success = true;
+    res->message = "PITCH=" + std::to_string(cam_pitch) + " ROLL=" + std::to_string(cam_roll);
+}
+
+// Kiwibot: pixel→3D coords lookup. Reports (-1,-1,-1) for stale frames, missing TF,
+// out-of-bounds pixels, or pixels with non-positive depth.
+void BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req,
+                                      realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res)
+{
+    constexpr double kMaxAgeSec = 3.0;
+    const auto& pixels = req->pixel_requested;
+
+    if (!_pc_filter)
+    {
+        res->xyz_coordinate.assign(pixels.size(), [](){ geometry_msgs::msg::Point p; p.x=-1; p.y=-1; p.z=-1; return p; }());
+        ROS_WARN_STREAM("get_coords called but pointcloud filter is not initialized");
+        return;
+    }
+
+    std::vector<geometry_msgs::msg::Point> raw_coords;
+    std::string source_frame_id;
+    rclcpp::Time stamp;
+    const bool have_cache = _pc_filter->getCoordsAtPixels(pixels, raw_coords, source_frame_id, stamp);
+
+    auto fill_invalid = [&](){
+        res->xyz_coordinate.clear();
+        res->xyz_coordinate.reserve(pixels.size());
+        for (size_t i = 0; i < pixels.size(); ++i)
+        {
+            geometry_msgs::msg::Point p;
+            p.x = -1.0; p.y = -1.0; p.z = -1.0;
+            res->xyz_coordinate.push_back(p);
+        }
+    };
+
+    if (!have_cache)
+    {
+        ROS_WARN_STREAM("get_coords called before any pointcloud frame has been cached");
+        fill_invalid();
+        return;
+    }
+
+    if ((_node.now() - stamp) > rclcpp::Duration::from_seconds(kMaxAgeSec))
+    {
+        ROS_WARN_STREAM("get_coords: cached pointcloud is stale (>"
+                        << kMaxAgeSec << "s); returning invalid points");
+        fill_invalid();
+        return;
+    }
+
+    geometry_msgs::msg::TransformStamped transform;
+    bool transform_available = true;
+    try
+    {
+        transform = _buffer_tf2->lookupTransform(req->frame, source_frame_id, tf2::TimePointZero);
+    }
+    catch (const tf2::TransformException& ex)
+    {
+        ROS_WARN_STREAM("get_coords: TF lookup '" << source_frame_id << "' -> '" << req->frame
+                                                  << "' failed: " << ex.what());
+        transform_available = false;
+    }
+
+    res->xyz_coordinate.clear();
+    res->xyz_coordinate.reserve(raw_coords.size());
+    for (const auto& raw : raw_coords)
+    {
+        geometry_msgs::msg::Point out_point;
+        if (raw.x < 0.0 && raw.y < 0.0 && raw.z < 0.0)
+        {
+            // sentinel from PointcloudFilter: invalid pixel or non-positive depth
+            out_point.x = -1.0; out_point.y = -1.0; out_point.z = -1.0;
+        }
+        else if (!transform_available)
+        {
+            out_point.x = -1.0; out_point.y = -1.0; out_point.z = -1.0;
+        }
+        else
+        {
+            geometry_msgs::msg::PointStamped ps_in, ps_out;
+            ps_in.header.frame_id = source_frame_id;
+            ps_in.header.stamp = stamp;
+            ps_in.point = raw;
+            tf2::doTransform(ps_in, ps_out, transform);
+            out_point = ps_out.point;
+        }
+        res->xyz_coordinate.push_back(out_point);
+    }
+}
+
+
+// Kiwibot: 3D point→pixel projection using COLOR camera intrinsics. Caller's points may be
+// in any TF frame; we transform them to camera_color_optical_frame and apply pinhole projection.
+// Pixel.z is the depth in meters in the optical frame (so the caller can sanity-check distance).
+void BaseRealSenseNode::get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req,
+                                     realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res)
+{
+    res->pixels.clear();
+    if (req->points_requested.empty())
+    {
+        ROS_WARN_STREAM("get_pixel called with empty points_requested");
+        return;
+    }
+
+    auto color_it = _camera_info.find(COLOR);
+    if (color_it == _camera_info.end())
+    {
+        ROS_WARN_STREAM("get_pixel called but COLOR camera_info is not yet available");
+        res->pixels.assign(req->points_requested.size(), [](){
+            geometry_msgs::msg::Point p; p.x = -1; p.y = -1; p.z = -1; return p;
+        }());
+        return;
+    }
+    const auto& msg_camera_info = color_it->second;
+    const std::string target_frame = OPTICAL_FRAME_ID(COLOR);
+
+    geometry_msgs::msg::TransformStamped transform;
+    bool transform_available = true;
+    try
+    {
+        transform = _buffer_tf2->lookupTransform(target_frame,
+                                                 req->points_requested.front().header.frame_id,
+                                                 tf2::TimePointZero);
+    }
+    catch (const tf2::TransformException& ex)
+    {
+        ROS_WARN_STREAM("get_pixel: TF lookup '" << req->points_requested.front().header.frame_id
+                                                  << "' -> '" << target_frame << "' failed: " << ex.what());
+        transform_available = false;
+    }
+
+    res->pixels.reserve(req->points_requested.size());
+    for (const auto& point : req->points_requested)
+    {
+        geometry_msgs::msg::Point pixel;
+        if (!transform_available)
+        {
+            pixel.x = -1.0; pixel.y = -1.0; pixel.z = -1.0;
+        }
+        else
+        {
+            geometry_msgs::msg::PointStamped transformed;
+            tf2::doTransform(point, transformed, transform);
+            // Pinhole projection. Add a tiny epsilon to avoid division-by-zero at z=0.
+            pixel.x = (msg_camera_info.k[0] * transformed.point.x) / (transformed.point.z + 1e-5)
+                      + msg_camera_info.k[2];
+            pixel.y = (msg_camera_info.k[4] * transformed.point.y) / (transformed.point.z + 1e-5)
+                      + msg_camera_info.k[5];
+            pixel.z = transformed.point.z;
+        }
+        res->pixels.push_back(pixel);
+    }
 }
 
 
@@ -932,8 +1182,38 @@ void BaseRealSenseNode::SetBaseStream()
 
 void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset)
 {
+    // Kiwibot: pointcloud cadence follows the depth-throttle setting; suppress full-rate publishes
+    // (and the cache update inside PointcloudFilter::Publish) when throttling is on.
+    if (!shouldPublishStream(_stereo_depth_publish_rate, _last_pointcloud_publish_ns))
+    {
+        return;
+    }
+    // Match iron's behavior: rewrite stamp to publish-time when throttling is active so consumers
+    // see the cadence rather than the (stale) sensor capture time.
+    const rclcpp::Time pub_t = (_stereo_depth_publish_rate > 0.0) ? _node.now() : t;
     std::string frame_id = OPTICAL_FRAME_ID(DEPTH);
-    _pc_filter->Publish(pc, t, frameset, frame_id);
+    _pc_filter->Publish(pc, pub_t, frameset, frame_id);
+}
+
+// Kiwibot: stream throttle. Returns true if rate<=0 (no throttling) or enough time has elapsed
+// since the last publish for that stream. The atomic load/store is intentionally lock-free:
+// if two threads race they may both pass once, but the next publish time is set to the latest.
+// For "publish at most this rate" semantics that's accurate enough.
+bool BaseRealSenseNode::shouldPublishStream(double rate, std::atomic<int64_t>& last_ns)
+{
+    if (rate <= 0.0)
+    {
+        return true;
+    }
+    const int64_t now_ns = _node.now().nanoseconds();
+    const int64_t period_ns = static_cast<int64_t>(1.0e9 / rate);
+    const int64_t prev = last_ns.load(std::memory_order_relaxed);
+    if (now_ns - prev < period_ns)
+    {
+        return false;
+    }
+    last_ns.store(now_ns, std::memory_order_relaxed);
+    return true;
 }
 
 bool BaseRealSenseNode::shouldPublishCameraInfo(const stream_index_pair& sip)
@@ -1147,7 +1427,7 @@ bool BaseRealSenseNode::fillCVMatImageAndReturnStatus(
 
 void BaseRealSenseNode::publishFrame(
     rs2::frame f,
-    const rclcpp::Time& t,
+    const rclcpp::Time& frame_t,
     const stream_index_pair& stream,
     std::map<stream_index_pair, cv::Mat>& images,
     const std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr>& info_publishers,
@@ -1155,6 +1435,24 @@ void BaseRealSenseNode::publishFrame(
     const bool is_publishMetadata)
 {
     ROS_DEBUG("publishFrame(...)");
+
+    // Kiwibot: null/empty frames can arrive briefly after a sensor stop/start cycle.
+    if (!f) return;
+
+    // Kiwibot: optional throttling. Color path is stream==COLOR with a non-depth frame.
+    // Depth-aligned-to-color path is stream==COLOR with a depth frame (set up at line ~900).
+    // When throttling is active for the stream, rewrite the stamp to publish-time so consumers
+    // see the cadence rather than the sensor capture time (matches iron's c33effef behavior).
+    rclcpp::Time t = frame_t;
+    if (stream == COLOR)
+    {
+        const bool is_aligned_depth = f.is<rs2::depth_frame>();
+        const double rate = is_aligned_depth ? _stereo_depth_publish_rate : _stereo_color_publish_rate;
+        std::atomic<int64_t>& last_ns = is_aligned_depth ? _last_depth_publish_ns : _last_color_publish_ns;
+        if (!shouldPublishStream(rate, last_ns)) return;
+        if (rate > 0.0) t = _node.now();
+    }
+
     unsigned int width = 0;
     unsigned int height = 0;
     auto stream_format = RS2_FORMAT_ANY;
@@ -1176,6 +1474,8 @@ void BaseRealSenseNode::publishFrame(
             height = timage.get_height();
         }
         stream_format = timage.get_profile().format();
+        if (width == 0 || height == 0) return;
+        if (!f.get_data()) return;
     }
     else
     {

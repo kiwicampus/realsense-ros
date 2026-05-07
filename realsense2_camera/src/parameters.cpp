@@ -104,6 +104,15 @@ void BaseRealSenseNode::getParameters()
     _parameters_names.push_back(param_name);
 #endif
 
+    // Kiwibot: optional throttling for color and depth-aligned-to-color (and pointcloud,
+    // which follows the depth rate). -1.0 (default) means no throttling.
+    param_name = std::string("stereo_color_publish_rate");
+    _stereo_color_publish_rate = _parameters->setParam<double>(param_name, -1.0);
+    _parameters_names.push_back(param_name);
+
+    param_name = std::string("stereo_depth_publish_rate");
+    _stereo_depth_publish_rate = _parameters->setParam<double>(param_name, -1.0);
+    _parameters_names.push_back(param_name);
 }
 
 void BaseRealSenseNode::setDynamicParams()
