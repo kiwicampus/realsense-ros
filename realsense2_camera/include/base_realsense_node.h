@@ -425,6 +425,11 @@ namespace realsense2_camera
         void calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
                               std_srvs::srv::Trigger::Response::SharedPtr res);
 
+        // Kiwibot: hardware-reset Trigger; remapped by kronos_bringup to /stereo/restart.
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _shutdown_srv;
+        void shutdown_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                         std_srvs::srv::Trigger::Response::SharedPtr res);
+
         // Kiwibot: pixel→3D coords service used by navigation_tools, debug_tools, etc.
         std::unique_ptr<tf2_ros::Buffer> _buffer_tf2;
         std::shared_ptr<tf2_ros::TransformListener> _listener_tf2;

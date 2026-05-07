@@ -586,6 +586,13 @@ void BaseRealSenseNode::publishServices()
                         std_srvs::srv::Trigger::Response::SharedPtr res)
                         {calibrate_imu_cb(req, res);});
 
+    // Kiwibot: hardware-reset Trigger; kronos_bringup remaps this to /stereo/restart.
+    _shutdown_srv = _node.create_service<std_srvs::srv::Trigger>(
+            "shutdown",
+            [&](const std_srvs::srv::Trigger::Request::SharedPtr req,
+                        std_srvs::srv::Trigger::Response::SharedPtr res)
+                        {shutdown_cb(req, res);});
+
     // Kiwibot: pixel→3D coords lookup against the latest pointcloud frame.
     _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
             "get_coords",

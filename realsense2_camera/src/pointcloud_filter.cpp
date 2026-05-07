@@ -25,7 +25,8 @@ PointcloudFilter::PointcloudFilter(std::shared_ptr<rs2::filter> filter, RosNodeB
     NamedFilter(filter, parameters, logger, is_enabled, false),
     _node(node),
     _allow_no_texture_points(ALLOW_NO_TEXTURE_POINTS),
-    _ordered_pc(ORDERED_PC)
+    _ordered_pc(ORDERED_PC),
+    _pc_subsample_fct(1)
     {
         setParameters();
     }
@@ -63,6 +64,13 @@ void PointcloudFilter::setParameters()
         {
             setPublisher();
         });
+
+    // Kiwibot: top-level pc_subsample_fct (matches kronos_bringup launch arg name).
+    // 1 = full density. Production sets this to 8 via STEREO_PC_SUBSAMPLE_FCT.
+    std::string subsample_param("pc_subsample_fct");
+    _pc_subsample_fct = _params.getParameters()->setParam<int>(subsample_param, 1);
+    if (_pc_subsample_fct < 1) _pc_subsample_fct = 1;
+    _parameters_names.push_back(subsample_param);
 }
 
 void PointcloudFilter::setPublisher()
@@ -150,15 +158,21 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
 
     rs2_intrinsics depth_intrin = pc.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
 
+    // Kiwibot: per-axis stride into the depth grid. 1 = full resolution.
+    const int stride = (_pc_subsample_fct < 1) ? 1 : _pc_subsample_fct;
+    const int width_out = depth_intrin.width / stride;
+    const int height_out = depth_intrin.height / stride;
+    const size_t out_capacity = static_cast<size_t>(width_out) * static_cast<size_t>(height_out);
+
     sensor_msgs::msg::PointCloud2::UniquePtr msg_pointcloud = std::make_unique<sensor_msgs::msg::PointCloud2>();
 
     sensor_msgs::PointCloud2Modifier modifier(*msg_pointcloud);
     modifier.setPointCloud2FieldsByString(1, "xyz");
-    modifier.resize(pc.size());
+    modifier.resize(out_capacity);
     if (_ordered_pc)
     {
-        msg_pointcloud->width = depth_intrin.width;
-        msg_pointcloud->height = depth_intrin.height;
+        msg_pointcloud->width = width_out;
+        msg_pointcloud->height = height_out;
         msg_pointcloud->is_dense = false;
     }
 
@@ -198,30 +212,37 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
         color_point = pc.get_texture_coordinates();
 
         float color_pixel[2];
-        for (size_t point_idx=0; point_idx < pc.size(); point_idx++, vertex++, color_point++)
+        for (int y_out = 0; y_out < height_out; ++y_out)
         {
-            float i(color_point->u);
-            float j(color_point->v);
-            bool valid_color_pixel(i >= 0.f && i <=1.f && j >= 0.f && j <=1.f);
-            bool valid_pixel(vertex->z > 0 && (valid_color_pixel || _allow_no_texture_points));
-            if (valid_pixel || _ordered_pc)
+            const size_t row_base = static_cast<size_t>(y_out) * stride * depth_intrin.width;
+            for (int x_out = 0; x_out < width_out; ++x_out)
             {
-                *iter_x = vertex->x;
-                *iter_y = vertex->y;
-                *iter_z = vertex->z;
-
-                if (valid_color_pixel)
+                const size_t idx = row_base + static_cast<size_t>(x_out) * stride;
+                const auto& v = vertex[idx];
+                const auto& cp = color_point[idx];
+                float i(cp.u);
+                float j(cp.v);
+                bool valid_color_pixel(i >= 0.f && i <=1.f && j >= 0.f && j <=1.f);
+                bool valid_pixel(v.z > 0 && (valid_color_pixel || _allow_no_texture_points));
+                if (valid_pixel || _ordered_pc)
                 {
-                    color_pixel[0] = i * texture_width;
-                    color_pixel[1] = j * texture_height;
-                    int pixx = static_cast<int>(color_pixel[0]);
-                    int pixy = static_cast<int>(color_pixel[1]);
-                    int offset = (pixy * texture_width + pixx) * num_colors;
-                    reverse_memcpy(&(*iter_color), color_data+offset, num_colors);  // PointCloud2 order of rgb is bgr.
+                    *iter_x = v.x;
+                    *iter_y = v.y;
+                    *iter_z = v.z;
+
+                    if (valid_color_pixel)
+                    {
+                        color_pixel[0] = i * texture_width;
+                        color_pixel[1] = j * texture_height;
+                        int pixx = static_cast<int>(color_pixel[0]);
+                        int pixy = static_cast<int>(color_pixel[1]);
+                        int offset = (pixy * texture_width + pixx) * num_colors;
+                        reverse_memcpy(&(*iter_color), color_data+offset, num_colors);  // PointCloud2 order of rgb is bgr.
+                    }
+                    ++iter_x; ++iter_y; ++iter_z;
+                    ++iter_color;
+                    ++valid_count;
                 }
-                ++iter_x; ++iter_y; ++iter_z;
-                ++iter_color;
-                ++valid_count;
             }
         }
     }
@@ -234,17 +255,23 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
         sensor_msgs::PointCloud2Iterator<float>iter_y(*msg_pointcloud, "y");
         sensor_msgs::PointCloud2Iterator<float>iter_z(*msg_pointcloud, "z");
 
-        for (size_t point_idx=0; point_idx < pc.size(); point_idx++, vertex++)
+        for (int y_out = 0; y_out < height_out; ++y_out)
         {
-            bool valid_pixel(vertex->z > 0);
-            if (valid_pixel || _ordered_pc)
+            const size_t row_base = static_cast<size_t>(y_out) * stride * depth_intrin.width;
+            for (int x_out = 0; x_out < width_out; ++x_out)
             {
-                *iter_x = vertex->x;
-                *iter_y = vertex->y;
-                *iter_z = vertex->z;
+                const size_t idx = row_base + static_cast<size_t>(x_out) * stride;
+                const auto& v = vertex[idx];
+                bool valid_pixel(v.z > 0);
+                if (valid_pixel || _ordered_pc)
+                {
+                    *iter_x = v.x;
+                    *iter_y = v.y;
+                    *iter_z = v.z;
 
-                ++iter_x; ++iter_y; ++iter_z;
-                ++valid_count;
+                    ++iter_x; ++iter_y; ++iter_z;
+                    ++valid_count;
+                }
             }
         }
     }

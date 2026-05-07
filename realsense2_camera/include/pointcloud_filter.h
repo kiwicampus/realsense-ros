@@ -50,6 +50,9 @@ namespace realsense2_camera
             RosNodeBase& _node;
             bool _allow_no_texture_points;
             bool _ordered_pc;
+            // Kiwibot: keep every Nth pixel in the published pointcloud (per-axis stride).
+            // Default 1 = full resolution. Production sets STEREO_PC_SUBSAMPLE_FCT=8 → 1/64 density.
+            int _pc_subsample_fct;
             std::mutex _mutex_publisher;
             rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pointcloud_publisher;
             std::string _pointcloud_qos;

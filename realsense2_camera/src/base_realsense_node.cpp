@@ -662,6 +662,24 @@ void BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
     res->message = "PITCH=" + std::to_string(cam_pitch) + " ROLL=" + std::to_string(cam_roll);
 }
 
+// Kiwibot: hardware-reset Trigger. Kronos remaps this to /stereo/restart.
+void BaseRealSenseNode::shutdown_cb(std_srvs::srv::Trigger::Request::SharedPtr /*req*/,
+                                    std_srvs::srv::Trigger::Response::SharedPtr res)
+{
+    RCLCPP_WARN(_logger, "Hardware reset requested, resetting device");
+    try
+    {
+        _dev.hardware_reset();
+        res->success = true;
+        res->message = "Realsense hardware reset issued";
+    }
+    catch (const std::exception& e)
+    {
+        res->success = false;
+        res->message = std::string("Hardware reset failed: ") + e.what();
+    }
+}
+
 // Kiwibot: pixel→3D coords lookup. Reports (-1,-1,-1) for stale frames, missing TF,
 // out-of-bounds pixels, or pixels with non-positive depth.
 void BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req,
