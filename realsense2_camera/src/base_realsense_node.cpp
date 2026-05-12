@@ -718,12 +718,17 @@ void BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
         return;
     }
 
-    if ((_node.now() - stamp) > rclcpp::Duration::from_seconds(kMaxAgeSec))
     {
-        ROS_WARN_STREAM("get_coords: cached pointcloud is stale (>"
-                        << kMaxAgeSec << "s); returning invalid points");
-        fill_invalid();
-        return;
+        const int64_t now_ns = _node.now().nanoseconds();
+        const int64_t stamp_ns = stamp.nanoseconds();
+        const int64_t max_age_ns = static_cast<int64_t>(kMaxAgeSec * 1e9);
+        if ((now_ns - stamp_ns) > max_age_ns)
+        {
+            ROS_WARN_STREAM("get_coords: cached pointcloud is stale (>"
+                            << kMaxAgeSec << "s); returning invalid points");
+            fill_invalid();
+            return;
+        }
     }
 
     geometry_msgs::msg::TransformStamped transform;

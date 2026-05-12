@@ -12,6 +12,7 @@ from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.descriptions import ComposableNode
 
 configurable_parameters = [{'name': 'camera_name',                  'default': 'camera', 'description': 'camera unique name'},
+                           {'name': 'camera_namespace',             'default': '', 'description': 'ROS namespace for the camera node; empty = root namespace'},
                            {'name': 'serial_no',                    'default': "''", 'description': 'choose device by serial number'},
                            {'name': 'usb_port_id',                  'default': "''", 'description': 'choose device by usb port id'},
                            {'name': 'device_type',                  'default': "''", 'description': 'choose device by type'},
@@ -127,7 +128,7 @@ def generate_launch_description():
                                     package="realsense2_camera",
                                     plugin="realsense2_camera::RealSenseNodeFactory",
                                     name="camera",
-                                    namespace="camera",
+                                    namespace=LaunchConfiguration("camera_namespace"),
                                     extra_arguments=[{"use_intra_process_comms": True}],
                                 )
                             ],
@@ -154,7 +155,7 @@ def generate_launch_description():
                                     package="realsense2_camera",
                                     plugin="realsense2_camera::RealSenseNodeFactory",
                                     name="camera",
-                                    namespace="camera",
+                                    namespace=LaunchConfiguration("camera_namespace"),
                                     extra_arguments=[{"use_intra_process_comms": True}],
                                 )
                             ],
@@ -169,7 +170,7 @@ def generate_launch_description():
             launch_ros.actions.Node(
                 condition=IfCondition(PythonExpression([LaunchConfiguration('config_file'), " == ''"])),
                 package='realsense2_camera',
-                namespace=LaunchConfiguration("camera_name"),
+                namespace=LaunchConfiguration("camera_namespace"),
                 name=LaunchConfiguration("camera_name"),
                 executable='realsense2_camera_node',
                 parameters=[set_configurable_parameters(configurable_parameters)
@@ -183,7 +184,7 @@ def generate_launch_description():
             launch_ros.actions.Node(
                 condition=IfCondition(PythonExpression([LaunchConfiguration('config_file'), " != ''"])),
                 package='realsense2_camera',
-                namespace=LaunchConfiguration("camera_name"),
+                namespace=LaunchConfiguration("camera_namespace"),
                 name=LaunchConfiguration("camera_name"),
                 executable='realsense2_camera_node',
                 parameters=[set_configurable_parameters(configurable_parameters)

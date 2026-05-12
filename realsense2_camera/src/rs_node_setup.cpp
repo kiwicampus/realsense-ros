@@ -395,7 +395,7 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
         rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
         options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
         _cam_imu_angles_publisher = _node.create_publisher<geometry_msgs::msg::Quaternion>(
-            "camera_imu_angles",
+            "~/camera_imu_angles",
             rclcpp::QoS(1).keep_all().transient_local().reliable(),
             options);
     }
@@ -581,28 +581,28 @@ void BaseRealSenseNode::publishServices()
 
     // Kiwibot: triggered by webclient operator to recompute camera_imu_angles from accel.
     _calibrate_imu_srv = _node.create_service<std_srvs::srv::Trigger>(
-            "calibrate_imu",
+            "~/calibrate_imu",
             [&](const std_srvs::srv::Trigger::Request::SharedPtr req,
                         std_srvs::srv::Trigger::Response::SharedPtr res)
                         {calibrate_imu_cb(req, res);});
 
     // Kiwibot: hardware-reset Trigger; kronos_bringup remaps this to /stereo/restart.
     _shutdown_srv = _node.create_service<std_srvs::srv::Trigger>(
-            "shutdown",
+            "~/shutdown",
             [&](const std_srvs::srv::Trigger::Request::SharedPtr req,
                         std_srvs::srv::Trigger::Response::SharedPtr res)
                         {shutdown_cb(req, res);});
 
     // Kiwibot: pixel→3D coords lookup against the latest pointcloud frame.
     _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
-            "get_coords",
+            "~/get_coords",
             [&](const realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req,
                         realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res)
                         {get_coords_cb(req, res);});
 
     // Kiwibot: 3D point→pixel projection using the COLOR camera intrinsics.
     _get_pixel_srv = _node.create_service<realsense2_camera_srvs::srv::PixelReq>(
-            "get_pixel",
+            "~/get_pixel",
             [&](const realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req,
                         realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res)
                         {get_pixel_cb(req, res);});
