@@ -217,7 +217,7 @@ namespace realsense2_camera
         void setupPublishers();
         void enable_devices();
         void setupFilters();
-        bool setBaseTime(double frame_time, rs2_timestamp_domain time_domain);
+        uint64_t millisecondsToNanoseconds(double timestamp_ms);
         rclcpp::Time frameSystemTimeSec(rs2::frame frame);
         cv::Mat& fix_depth_scale(const cv::Mat& from_image, cv::Mat& to_image);
         void clip_depth(rs2::depth_frame depth_frame, float clipping_dist);
@@ -295,6 +295,9 @@ namespace realsense2_camera
         std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> _imu_publishers;
         std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Odometry>> _odom_publisher;
         std::shared_ptr<SyncedImuPublisher> _synced_imu_publisher;
+        // IMU sync state — member (not static) so it resets on Motion Module stop/start.
+        std::mutex _imu_callback_mutex;
+        std::deque<CimuData> _imu_history;
         std::map<unsigned int, int> _image_format;
         std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr> _info_publisher;
         std::map<stream_index_pair, rclcpp::Publisher<realsense2_camera_msgs::msg::Metadata>::SharedPtr> _metadata_publishers;
@@ -305,9 +308,10 @@ namespace realsense2_camera
         std::map<unsigned int, std::string> _encoding;
 
         std::map<stream_index_pair, sensor_msgs::msg::CameraInfo> _camera_info;
-        std::atomic_bool _is_initialized_time_base;
+        std::mutex _time_base_mutex;
+        bool _is_initialized_time_base;
         double _camera_time_base;
-
+        double _previous_frame_time;
         rclcpp::Time _ros_time_base;
         bool _sync_frames;
         bool _pointcloud;
