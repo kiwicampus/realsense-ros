@@ -52,8 +52,8 @@ void SyncedImuPublisher::Pause()
 void SyncedImuPublisher::Resume()
 {
     std::lock_guard<std::mutex> lock_guard(_mutex);
-    PublishPendingMessages();
     _pause_mode = false;
+    PublishPendingMessages();
 }
 
 void SyncedImuPublisher::PublishPendingMessages()
