@@ -21,6 +21,8 @@
 #include <thread>
 #include <mutex>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <array>
+#include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <rclcpp/clock.hpp>
 #include <fstream>
 #include <image_publisher.h>
@@ -78,8 +80,8 @@ void SyncedImuPublisher::Pause()
 void SyncedImuPublisher::Resume()
 {
     std::lock_guard<std::mutex> lock_guard(_mutex);
-    PublishPendingMessages();
     _pause_mode = false;
+    PublishPendingMessages();
 }
 
 void SyncedImuPublisher::PublishPendingMessages()
@@ -139,6 +141,28 @@ BaseRealSenseNode::BaseRealSenseNode(RosNodeBase& node,
     {
         ROS_INFO("Intra-Process communication enabled");
     }
+    _stereo_color_publish_rate(-1.0),
+    _stereo_color_frame_available(false),
+    _stereo_depth_publish_rate(-1.0),
+    _stereo_depth_frame_available(false),
+    _stereo_pointcloud_frame_available(false),
+    _previous_frame_time(0.0)
+{
+
+    // Kiwi added: allow static tf with intra process
+    rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
+    options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    _static_tf_broadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(node, tf2_ros::StaticBroadcasterQoS(), options);
+
+    _image_format[1] = CV_8UC1;    // CVBridge type
+    _image_format[2] = CV_16UC1;    // CVBridge type
+    _image_format[3] = CV_8UC3;    // CVBridge type
+    _encoding[1] = sensor_msgs::image_encodings::MONO8; // ROS message type
+    _encoding[2] = sensor_msgs::image_encodings::TYPE_16UC1; // ROS message type
+    _encoding[3] = sensor_msgs::image_encodings::RGB8; // ROS message type
+    
+    // Infrared stream
+    _format[RS2_STREAM_INFRARED] = RS2_FORMAT_Y8;
 
     initializeFormatsMaps();
     _monitor_options = {RS2_OPTION_ASIC_TEMPERATURE, RS2_OPTION_PROJECTOR_TEMPERATURE};
@@ -195,6 +219,42 @@ void BaseRealSenseNode::publishTopics()
 {
     getParameters();
     setup();
+    // Kiwi added virtual cam
+    if (_color_virtual_cam >= 0 ){
+        _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
+        _stream_intrinsics[COLOR].width, _stream_intrinsics[COLOR].height);
+    }
+
+    // Initialize stereo color publish timer if custom rate is enabled
+    if (_stereo_color_publish_rate > 0.0)
+    {
+        ROS_INFO_STREAM("Stereo color publish rate set to " << _stereo_color_publish_rate << " Hz");
+        _stereo_color_publish_timer = _node.create_wall_timer(
+            std::chrono::milliseconds(static_cast<int>(1000.0 / _stereo_color_publish_rate)),
+            std::bind(&BaseRealSenseNode::stereoColorPublishTimerCallback, this)
+        );
+    }
+
+    // Initialize stereo depth publish timer if custom rate is enabled
+    if (_stereo_depth_publish_rate > 0.0)
+    {
+        ROS_INFO_STREAM("Stereo depth publish rate set to " << _stereo_depth_publish_rate << " Hz");
+        _stereo_depth_publish_timer = _node.create_wall_timer(
+            std::chrono::milliseconds(static_cast<int>(1000.0 / _stereo_depth_publish_rate)),
+            std::bind(&BaseRealSenseNode::stereoDepthPublishTimerCallback, this)
+        );
+    }
+
+    // Initialize stereo pointcloud publish timer if custom rate is enabled
+    if (_stereo_depth_publish_rate > 0.0)
+    {
+        ROS_INFO_STREAM("Stereo pointcloud publish rate set to " << _stereo_depth_publish_rate << " Hz");
+        _stereo_pointcloud_publish_timer = _node.create_wall_timer(
+            std::chrono::milliseconds(static_cast<int>(1000.0 / _stereo_depth_publish_rate)),
+            std::bind(&BaseRealSenseNode::stereoPointcloudPublishTimerCallback, this)
+        );
+    }
+
     ROS_INFO_STREAM("RealSense Node Is Up!");
 }
 
@@ -237,6 +297,53 @@ void BaseRealSenseNode::initializeFormatsMaps()
     _rs_format_to_ros_format[RS2_FORMAT_RAW8] = sensor_msgs::image_encodings::TYPE_8UC1;
     _rs_format_to_ros_format[RS2_FORMAT_RAW10] = sensor_msgs::image_encodings::TYPE_16UC1;
     _rs_format_to_ros_format[RS2_FORMAT_RAW16] = sensor_msgs::image_encodings::TYPE_16UC1;
+}
+
+void BaseRealSenseNode::stereoColorPublishTimerCallback()
+{
+    std::lock_guard<std::mutex> lock(_stereo_color_frame_mutex);
+    if (_stereo_color_frame_available && _latest_stereo_color_frame)
+    {
+        // Find the color stream publisher
+        auto color_publisher_it = _image_publishers.find(COLOR);
+        if (color_publisher_it != _image_publishers.end())
+        {
+            // Update timestamp and move the frame to avoid copying
+            _latest_stereo_color_frame->header.stamp = _node.now();
+            color_publisher_it->second->publish(std::move(_latest_stereo_color_frame));
+        }
+    }
+}
+
+void BaseRealSenseNode::stereoDepthPublishTimerCallback()
+{
+    std::lock_guard<std::mutex> lock(_stereo_depth_frame_mutex);
+    if (_stereo_depth_frame_available && _latest_stereo_depth_frame)
+    {
+        // Find the depth stream publisher, the COLOR publisher is the one that is aligned to the rgb image
+        auto depth_publisher_it = _depth_aligned_image_publishers.find(COLOR);
+        if (depth_publisher_it != _depth_aligned_image_publishers.end())
+        {
+            // Update timestamp and move the frame to avoid copying
+            _latest_stereo_depth_frame->header.stamp = _node.now();
+            depth_publisher_it->second->publish(std::move(_latest_stereo_depth_frame));
+        }
+    }
+}
+
+void BaseRealSenseNode::stereoPointcloudPublishTimerCallback()
+{
+    std::lock_guard<std::mutex> lock(_stereo_pointcloud_frame_mutex);
+    if (_stereo_pointcloud_frame_available && _latest_stereo_pointcloud_frame)
+    {
+        // Get the pointcloud publisher from the pc_filter
+        if (_pc_filter && _pc_filter->getPointcloudPublisher())
+        {
+            // Update timestamp and move the frame to avoid copying
+            _latest_stereo_pointcloud_frame->header.stamp = _node.now();
+            _pc_filter->getPointcloudPublisher()->publish(std::move(_latest_stereo_pointcloud_frame));
+        }
+    }
 }
 
 void BaseRealSenseNode::setupFilters()
@@ -370,7 +477,6 @@ template <typename T> T lerp(const T &a, const T &b, const double t) {
 
 void BaseRealSenseNode::FillImuData_LinearInterpolation(const CimuData imu_data, std::deque<sensor_msgs::msg::Imu>& imu_msgs)
 {
-    static std::deque<CimuData> _imu_history;
     _imu_history.push_back(imu_data);
     stream_index_pair type(imu_data.m_type);
     imu_msgs.clear();
@@ -417,16 +523,17 @@ void BaseRealSenseNode::FillImuData_Copy(const CimuData imu_data, std::deque<sen
 {
     stream_index_pair type(imu_data.m_type);
 
-    static CimuData _accel_data(ACCEL, {0,0,0}, -1.0);
     if (ACCEL == type)
     {
-        _accel_data = imu_data;
+        _imu_history.clear();
+        _imu_history.push_back(imu_data);
         return;
     }
-    if (!_accel_data.is_set())
+
+    if (_imu_history.empty())
         return;
 
-    imu_msgs.push_back(CreateUnitedMessage(_accel_data, imu_data));
+    imu_msgs.push_back(CreateUnitedMessage(_imu_history.back(), imu_data));
 }
 
 void BaseRealSenseNode::ImuMessage_AddDefaultValues(sensor_msgs::msg::Imu& imu_msg)
@@ -444,13 +551,10 @@ void BaseRealSenseNode::ImuMessage_AddDefaultValues(sensor_msgs::msg::Imu& imu_m
 
 void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync_method)
 {
-    static std::mutex m_mutex;
-
-    m_mutex.lock();
+    std::lock_guard<std::mutex> lock(_imu_callback_mutex);
 
     auto stream = frame.get_profile().stream_type();
     auto stream_index = (stream == GYRO.first)?GYRO:ACCEL;
-    double frame_time = frame.get_timestamp();
 
     bool placeholder_false(false);
     if (_is_initialized_time_base.compare_exchange_strong(placeholder_false, true) )
@@ -492,21 +596,40 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
             ImuMessage_AddDefaultValues(imu_msg);
             _synced_imu_publisher->Publish(imu_msg);
             ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+
+            // kiwi Added to calculate first accel measurements
+            _imu_accel_x_vector.push_back(imu_msg.linear_acceleration.x);
+            _imu_accel_y_vector.push_back(imu_msg.linear_acceleration.y);
+            _imu_accel_z_vector.push_back(imu_msg.linear_acceleration.z);
+
+            if (_imu_accel_x_vector.size() > 30 )
+                _imu_accel_initiated = true;
+
             imu_msgs.pop_front();
          }
     }
-    m_mutex.unlock();
+}
+
+std::array<double, 2> BaseRealSenseNode::getImuPitchandRoll() {
+    double accel_x = std::accumulate(_imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0) / _imu_accel_x_vector.size();
+    double accel_y = std::accumulate(_imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0) / _imu_accel_y_vector.size();
+    double accel_z = std::accumulate(_imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0) / _imu_accel_z_vector.size();
+
+    // Calculate pitch and roll with imu accel data
+    // With respect to our robot 4.0, raw data: y is looking up, z forward and x to the left.
+    double x_Buff = accel_z;  // corresponding to /camera/imu z
+    double y_Buff = accel_x;  // corresponding to /camera/imu x
+    double z_Buff = accel_y;  // corresponding to /camera/imu y
+
+    double pitch = atan2((-x_Buff), sqrt(y_Buff * y_Buff + z_Buff * z_Buff));
+    double roll =  atan2(-y_Buff, -z_Buff);    //signs were modified doing tests.
+
+    return {pitch, roll};
 }
 
 void BaseRealSenseNode::imu_callback(rs2::frame frame)
 {
     auto stream = frame.get_profile().stream_type();
-    double frame_time = frame.get_timestamp();
-    bool placeholder_false(false);
-    if (_is_initialized_time_base.compare_exchange_strong(placeholder_false, true) )
-    {
-        _is_initialized_time_base = setBaseTime(frame_time, frame.get_frame_timestamp_domain());
-    }
 
     ROS_DEBUG("Frame arrived: stream: %s ; index: %d ; Timestamp Domain: %s",
                 ros_stream_to_string(frame.get_profile().stream_type()).c_str(),
@@ -842,14 +965,8 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
         _synced_imu_publisher->Pause();
     double frame_time = frame.get_timestamp();
 
-    // We compute a ROS timestamp which is based on an initial ROS time at point of first frame,
-    // and the incremental timestamp from the camera.
-    // In sync mode the timestamp is based on ROS time
-    bool placeholder_false(false);
-    if (_is_initialized_time_base.compare_exchange_strong(placeholder_false, true) )
-    {
-        _is_initialized_time_base = setBaseTime(frame_time, frame.get_frame_timestamp_domain());
-    }
+    double frame_time = frame.get_timestamp();
+    (void)frame_time;
 
     rclcpp::Time t(frameSystemTimeSec(frame));
     if (frame.is<rs2::frameset>())
@@ -1004,22 +1121,14 @@ void BaseRealSenseNode::multiple_message_callback(rs2::frame frame, imu_sync_met
     }
 }
 
-bool BaseRealSenseNode::setBaseTime(double frame_time, rs2_timestamp_domain time_domain)
+uint64_t BaseRealSenseNode::millisecondsToNanoseconds(double timestamp_ms)
 {
-    if (time_domain == RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME)
-    {
-        ROS_WARN_ONCE("Frame metadata isn't available! (frame_timestamp_domain = RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME)");
-    }
-
-    if (time_domain == RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK)
-    {
-        ROS_WARN("frame's time domain is HARDWARE_CLOCK. Timestamps may reset periodically.");
-        _ros_time_base = _node.now();
-        _camera_time_base = frame_time;
-        _previous_frame_time = frame_time;
-        return true;
-    }
-    return false;
+    double int_part_ms, fract_part_ms;
+    fract_part_ms = modf(timestamp_ms, &int_part_ms);
+    uint64_t int_part_ns = static_cast<uint64_t>(int_part_ms) * 1000000;
+    uint64_t fract_part_ns = static_cast<uint64_t>(fract_part_ms * 10000000);
+    fract_part_ns = (fract_part_ns % 10 > 4) ? (fract_part_ns / 10 + 1) : (fract_part_ns / 10);
+    return int_part_ns + fract_part_ns;
 }
 
 uint64_t BaseRealSenseNode::millisecondsToNanoseconds(double timestamp_ms)
@@ -1041,7 +1150,16 @@ rclcpp::Time BaseRealSenseNode::frameSystemTimeSec(rs2::frame frame)
     double timestamp_ms = frame.get_timestamp();
     if (frame.get_frame_timestamp_domain() == RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK)
     {
-        if (_previous_frame_time > timestamp_ms)
+        std::lock_guard<std::mutex> lock(_time_base_mutex);
+        if (!_is_initialized_time_base)
+        {
+            ROS_WARN("frame's time domain is HARDWARE_CLOCK. Timestamps may reset periodically.");
+            _ros_time_base = _node.now();
+            _camera_time_base = timestamp_ms;
+            _previous_frame_time = timestamp_ms;
+            _is_initialized_time_base = true;
+        }
+        else if (_previous_frame_time > timestamp_ms)
         {
             ROS_WARN("Hardware clock reset detected. Resetting ROS time base.");
             _ros_time_base = _node.now();
@@ -1049,17 +1167,19 @@ rclcpp::Time BaseRealSenseNode::frameSystemTimeSec(rs2::frame frame)
         }
         _previous_frame_time = timestamp_ms;
 
-        double elapsed_camera_ns = millisecondsToNanoseconds(timestamp_ms - _camera_time_base);
+        double elapsed_camera_ns = (/*ms*/ timestamp_ms - /*ms*/ _camera_time_base) * 1e6;
 
         /*
-        Fixing deprecated-declarations compilation error for EOL distro (foxy)
+        Fixing deprecated-declarations compilation warning.
+        Duration(rcl_duration_value_t) is deprecated in favor of
+        static Duration::from_nanoseconds(rcl_duration_value_t)
+        starting from GALAXY.
         */
 #if defined(FOXY)
         auto duration = rclcpp::Duration(elapsed_camera_ns);
 #else
         auto duration = rclcpp::Duration::from_nanoseconds(elapsed_camera_ns);
 #endif
-
         return rclcpp::Time(_ros_time_base + duration);
     }
     else

@@ -37,7 +37,9 @@ endif()
 # Including services
 set(SRV_FILES
   "srv/CoordinateReq.srv"
+  "srv/VersionReq.srv"
   "srv/PixelReq.srv"
+  "srv/CameraPitchReq.srv"
 )
 
 # Message generation

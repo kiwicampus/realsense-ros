@@ -42,6 +42,12 @@ namespace realsense2_camera
                                    std::string& source_frame_id,
                                    rclcpp::Time& stamp);
 
+            // KIWI: Make it public so we can get it in the get coords service call
+            sensor_msgs::msg::PointCloud2 _msg_pointcloud;
+            //DO NOT WRITE THIS VARIABLE, ONLY READ OPERATIONS ARE ALLOWED
+            std::atomic<rs2::vertex*> _vertex;
+            rs2_intrinsics _depth_intrin;
+
         private:
             void setParameters();
 
@@ -65,5 +71,10 @@ namespace realsense2_camera
             rs2_intrinsics _cached_intrinsics{};
             rclcpp::Time _cached_stamp;
             std::string _cached_frame_id;
+
+            //Toxic logs removal
+            int _texture_display_logs;
+            // Pointcloud subsampling and decimation filter
+            int _pc_subsample_fct;
     };
 }

@@ -42,6 +42,10 @@ void PointcloudFilter::setParameters()
     _params.getParameters()->setParamT(param_name, _ordered_pc);
     _parameters_names.push_back(param_name);
 
+    param_name = std::string("texture_display_logs");
+    _texture_display_logs =  _params.getParameters()->setParam<int>(param_name, TEXTURE_DISPLAY_LOGS);
+    _parameters_names.push_back(param_name);
+
     param_name = module_name + "." + std::string("pointcloud_qos");
     rcl_interfaces::msg::ParameterDescriptor crnt_descriptor;
     crnt_descriptor.description = "Available options are:\n" + list_available_qos_strings();
@@ -97,7 +101,7 @@ void reverse_memcpy(unsigned char* dst, const unsigned char* src, size_t n)
 
 }
 
-void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id)
+void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id, bool publish_immediately)
 {
     // Kiwibot: refresh cache for the get_coords service before any early-return on no subscribers.
     // rs2::points is refcounted; assignment bumps the count and keeps the vertex buffer alive.
@@ -284,10 +288,17 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
         msg_pointcloud->is_dense = true;
         modifier.resize(valid_count);
     }
+    if (publish_immediately)
     {
         std::lock_guard<std::mutex> lock_guard(_mutex_publisher);
         if (_pointcloud_publisher)
             _pointcloud_publisher->publish(std::move(msg_pointcloud));
+    }
+    else
+    {
+        // Cache for getLatestPointcloudMessage() — used when the deferred-publish
+        // path is enabled (_stereo_depth_publish_rate > 0).
+        _msg_pointcloud = std::move(*msg_pointcloud);
     }
 }
 

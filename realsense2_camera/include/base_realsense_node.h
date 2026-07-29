@@ -83,6 +83,40 @@
 #include "realsense2_camera_msgs/srv/safety_preset_write.hpp"
 #include "realsense2_camera_msgs/srv/safety_interface_config_read.hpp"
 #include "realsense2_camera_msgs/srv/safety_interface_config_write.hpp"
+// Kiwi added
+#include <numeric>
+#include "fake_webcam.hpp"
+#include <std_msgs/msg/empty.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <std_srvs/srv/trigger.hpp>
+#include <realsense2_camera_srvs/srv/coordinate_req.hpp>
+#include <realsense2_camera_srvs/srv/pixel_req.hpp>
+#include <realsense2_camera_srvs/srv/version_req.hpp>
+#include <realsense2_camera_srvs/srv/camera_pitch_req.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include "tf2_ros/message_filter.h"
+#if defined(HUMBLE)
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#else
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+#endif
+
+
+inline double getEnv(const char* var, double default_var)
+{
+    try
+    {
+        return std::stof(getenv(var));
+    } catch (const std::exception& e)
+    {
+        return default_var;
+    }
+}
+
 
 using realsense2_camera_msgs::msg::Extrinsics;
 using realsense2_camera_msgs::msg::IMUInfo;
@@ -121,6 +155,7 @@ namespace realsense2_camera
             void Publish(sensor_msgs::msg::Imu msg);     //either send or hold message.
             size_t getNumSubscribers();
             void Enable(bool is_enabled) {_is_enabled=is_enabled;};
+            bool isEnabled(){ return _is_enabled;}; // Kiwi: make it public so we can check is the imu is enabled 
         
         private:
             void PublishPendingMessages();
@@ -381,7 +416,11 @@ namespace realsense2_camera
         rclcpp::Publisher<nav_msgs::msg::GridCells>::SharedPtr _occupancy_publisher;
         std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> _imu_publishers;
         std::shared_ptr<SyncedImuPublisher> _synced_imu_publisher;
-        std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr> _info_publishers;
+        // IMU sync state — member (not static) so it resets on Motion Module stop/start.
+        std::mutex _imu_callback_mutex;
+        std::deque<CimuData> _imu_history;
+        std::map<unsigned int, int> _image_format;
+        std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr> _info_publisher;
         std::map<stream_index_pair, rclcpp::Publisher<realsense2_camera_msgs::msg::Metadata>::SharedPtr> _metadata_publishers;
         std::map<stream_index_pair, rclcpp::Publisher<IMUInfo>::SharedPtr> _imu_info_publishers;
         std::map<stream_index_pair, rclcpp::Publisher<Extrinsics>::SharedPtr> _extrinsics_publishers;
@@ -391,10 +430,10 @@ namespace realsense2_camera
         std::map<rs2_format, int> _rs_format_to_cv_format;
 
         std::map<stream_index_pair, sensor_msgs::msg::CameraInfo> _camera_info;
-        std::atomic_bool _is_initialized_time_base;
+        std::mutex _time_base_mutex;
+        bool _is_initialized_time_base;
         double _camera_time_base;
         double _previous_frame_time;
-
         rclcpp::Time _ros_time_base;
         bool _sync_frames;
         bool _enable_rgbd;
@@ -485,6 +524,81 @@ namespace realsense2_camera
 #endif
 
 std::string _tf_prefix;
+         // Kiwi additions
+        FakeWebcam* _virtualcam;
+        double _color_last_timestamp = 0.0;
+        // Constants
+        int _color_virtual_cam;
+        std::string _robot_base_frame;
+        // Position of camera in relation to robot base frame
+        float _camera_link_x;
+        float _camera_link_y;
+        float _camera_link_z;
+        // Stereo color publish rate (if different from default FPS)
+        double _stereo_color_publish_rate;
+        // Stereo depth publish rate (if different from default FPS)
+        double _stereo_depth_publish_rate;
+        // Imu accel vars
+        std::vector<double> _imu_accel_x_vector;
+        std::vector<double> _imu_accel_y_vector;
+        std::vector<double> _imu_accel_z_vector;
+        bool _imu_accel_initiated = false;
+        void publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch);
+        rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr _cam_imu_angles_publisher;
+        // Subscriber for shutting down
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _shutdown_srv;
+        void shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res);
+
+        //coordinate service
+        rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
+        bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
+        std::atomic<double> _cam_pitch;
+        std::atomic<double> _cam_roll;
+        std::atomic<double> _cam_yaw;
+        //version service:
+        rclcpp::Service<realsense2_camera_srvs::srv::VersionReq>::SharedPtr _get_version_srv;
+        bool get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res);
+        //pixel service
+        rclcpp::Service<realsense2_camera_srvs::srv::PixelReq>::SharedPtr _get_pixel_srv;
+        bool get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res);
+        std::unique_ptr<tf2_ros::Buffer> _buffer_tf2;
+        std::shared_ptr<tf2_ros::TransformListener> _listener_tf2;
+        //get pitch service
+        rclcpp::Service<realsense2_camera_srvs::srv::CameraPitchReq>::SharedPtr _get_pitch_srv;
+        bool get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res);
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _calibrate_imu_srv;
+        bool calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                              std_srvs::srv::Trigger::Response::SharedPtr res);
+        void setupServices();
+
+        // Chassis transform timer for waiting pitch calculation
+        rclcpp::TimerBase::SharedPtr _chassis_transform_tmr;
+        tf2::Quaternion getInclinationQuat();
+        tf2::Quaternion getInclinationQuat(double pitch);
+        //publish camera imu angles
+        std::array<double, 2> getImuPitchandRoll();
+        void ChassisTransformTmrCb();
+
+        // Stereo color publish rate control
+        rclcpp::TimerBase::SharedPtr _stereo_color_publish_timer;
+        std::mutex _stereo_color_frame_mutex;
+        sensor_msgs::msg::Image::UniquePtr _latest_stereo_color_frame;
+        bool _stereo_color_frame_available;
+        void stereoColorPublishTimerCallback();
+
+        // Stereo depth publish rate control
+        rclcpp::TimerBase::SharedPtr _stereo_depth_publish_timer;
+        std::mutex _stereo_depth_frame_mutex;
+        sensor_msgs::msg::Image::UniquePtr _latest_stereo_depth_frame;
+        bool _stereo_depth_frame_available;
+        void stereoDepthPublishTimerCallback();
+
+        // Stereo pointcloud publish rate control
+        rclcpp::TimerBase::SharedPtr _stereo_pointcloud_publish_timer;
+        std::mutex _stereo_pointcloud_frame_mutex;
+        sensor_msgs::msg::PointCloud2::UniquePtr _latest_stereo_pointcloud_frame;
+        bool _stereo_pointcloud_frame_available;
+        void stereoPointcloudPublishTimerCallback();
 
     };//end class
 }
