@@ -370,6 +370,14 @@ namespace realsense2_camera
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _shutdown_srv;
         void shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res);
 
+        // ---- depth preset (advanced mode) ----
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _reload_preset_srv;
+        void reload_preset_callback(const std_srvs::srv::Trigger::Request::SharedPtr req,
+                                    std_srvs::srv::Trigger::Response::SharedPtr res);
+        /// Read json_file_path and hand it to the device. Used at startup and by
+        /// the reload service. msg carries the outcome either way.
+        bool loadDepthPreset(std::string& msg);
+
         //coordinate service
         rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
         bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);

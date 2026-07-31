@@ -6,3 +6,5 @@
 .idea/
 .vs/
 *.json
+# ...but the depth presets shipped with the package must be tracked:
+!realsense2_camera/config/*.json

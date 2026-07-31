@@ -259,6 +259,12 @@ install(DIRECTORY
     DESTINATION share/${PROJECT_NAME}
     )
 
+# Install the depth preset(s) applied via the json_file_path parameter
+install(DIRECTORY
+    config
+    DESTINATION share/${PROJECT_NAME}
+    )
+
 # Test
 if(BUILD_TESTING)
 # This does nothing for now, note that ROS build farm build with BUILD_TESTING=1
