@@ -32,7 +32,7 @@ namespace realsense2_camera
             PointcloudFilter(std::shared_ptr<rs2::filter> filter, RosNodeBase& node, std::shared_ptr<Parameters> parameters, rclcpp::Logger logger, bool is_enabled=false);
 
             void setPublisher();
-            void Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id);
+            void Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id, bool publish_immediately);
 
             // Kiwibot: pixel→3D lookup against the most recent depth frame.
             // Returns false if no frame has been cached yet. Pixels outside the depth image
@@ -74,7 +74,5 @@ namespace realsense2_camera
 
             //Toxic logs removal
             int _texture_display_logs;
-            // Pointcloud subsampling and decimation filter
-            int _pc_subsample_fct;
     };
 }

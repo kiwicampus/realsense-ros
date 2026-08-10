@@ -130,7 +130,13 @@ BaseRealSenseNode::BaseRealSenseNode(RosNodeBase& node,
     _imu_sync_method(imu_sync_method::NONE),
     _is_profile_changed(false),
     _is_align_depth_changed(false),
-    _safety_sensor(nullptr)
+    _safety_sensor(nullptr),
+    _stereo_color_publish_rate(-1.0),
+    _stereo_color_frame_available(false),
+    _stereo_depth_publish_rate(-1.0),
+    _stereo_depth_frame_available(false),
+    _stereo_pointcloud_frame_available(false),
+    _previous_frame_time(0.0)
 #if defined (ACCELERATE_GPU_WITH_GLSL)
     ,_app(1280, 720, "RS_GLFW_Window"),
     _accelerate_gpu_with_glsl(false),
@@ -141,13 +147,6 @@ BaseRealSenseNode::BaseRealSenseNode(RosNodeBase& node,
     {
         ROS_INFO("Intra-Process communication enabled");
     }
-    _stereo_color_publish_rate(-1.0),
-    _stereo_color_frame_available(false),
-    _stereo_depth_publish_rate(-1.0),
-    _stereo_depth_frame_available(false),
-    _stereo_pointcloud_frame_available(false),
-    _previous_frame_time(0.0)
-{
 
     // Kiwi added: allow static tf with intra process
     rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
@@ -555,6 +554,7 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
 
     auto stream = frame.get_profile().stream_type();
     auto stream_index = (stream == GYRO.first)?GYRO:ACCEL;
+    double frame_time = frame.get_timestamp();
 
     bool placeholder_false(false);
     if (_is_initialized_time_base.compare_exchange_strong(placeholder_false, true) )
@@ -963,7 +963,6 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
 {
     if (_synced_imu_publisher)
         _synced_imu_publisher->Pause();
-    double frame_time = frame.get_timestamp();
 
     double frame_time = frame.get_timestamp();
     (void)frame_time;

@@ -99,7 +99,7 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include "tf2_ros/message_filter.h"
-#if defined(HUMBLE)
+#if defined(HUMBLE) || defined(JAZZY)
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #else
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
@@ -461,7 +461,7 @@ namespace realsense2_camera
         rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr _cam_imu_angles_publisher;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _calibrate_imu_srv;
         std::array<double, 2> getImuPitchandRoll();
-        void calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
+        bool calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
                               std_srvs::srv::Trigger::Response::SharedPtr res);
 
         // Kiwibot: hardware-reset Trigger; remapped by kronos_bringup to /stereo/restart.
@@ -534,19 +534,9 @@ std::string _tf_prefix;
         float _camera_link_x;
         float _camera_link_y;
         float _camera_link_z;
-        // Stereo color publish rate (if different from default FPS)
-        double _stereo_color_publish_rate;
-        // Stereo depth publish rate (if different from default FPS)
-        double _stereo_depth_publish_rate;
-        // Imu accel vars
-        std::vector<double> _imu_accel_x_vector;
-        std::vector<double> _imu_accel_y_vector;
-        std::vector<double> _imu_accel_z_vector;
-        bool _imu_accel_initiated = false;
+
         void publishChassisTransform(rclcpp::Time t, bool dynamic_transform, bool use_imu_pitch);
-        rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr _cam_imu_angles_publisher;
         // Subscriber for shutting down
-        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _shutdown_srv;
         void shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res);
 
         // ---- depth preset (advanced mode) ----
@@ -558,25 +548,15 @@ std::string _tf_prefix;
         bool loadDepthPreset(std::string& msg);
 
         //coordinate service
-        rclcpp::Service<realsense2_camera_srvs::srv::CoordinateReq>::SharedPtr _get_coords_srv;
-        bool get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CoordinateReq::Response::SharedPtr res);
         std::atomic<double> _cam_pitch;
         std::atomic<double> _cam_roll;
         std::atomic<double> _cam_yaw;
         //version service:
         rclcpp::Service<realsense2_camera_srvs::srv::VersionReq>::SharedPtr _get_version_srv;
         bool get_version_cb(realsense2_camera_srvs::srv::VersionReq::Request::SharedPtr req, realsense2_camera_srvs::srv::VersionReq::Response::SharedPtr res);
-        //pixel service
-        rclcpp::Service<realsense2_camera_srvs::srv::PixelReq>::SharedPtr _get_pixel_srv;
-        bool get_pixel_cb(realsense2_camera_srvs::srv::PixelReq::Request::SharedPtr req, realsense2_camera_srvs::srv::PixelReq::Response::SharedPtr res);
-        std::unique_ptr<tf2_ros::Buffer> _buffer_tf2;
-        std::shared_ptr<tf2_ros::TransformListener> _listener_tf2;
         //get pitch service
         rclcpp::Service<realsense2_camera_srvs::srv::CameraPitchReq>::SharedPtr _get_pitch_srv;
         bool get_pitch_cb(realsense2_camera_srvs::srv::CameraPitchReq::Request::SharedPtr req, realsense2_camera_srvs::srv::CameraPitchReq::Response::SharedPtr res);
-        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr _calibrate_imu_srv;
-        bool calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr req,
-                              std_srvs::srv::Trigger::Response::SharedPtr res);
         void setupServices();
 
         // Chassis transform timer for waiting pitch calculation
@@ -584,7 +564,6 @@ std::string _tf_prefix;
         tf2::Quaternion getInclinationQuat();
         tf2::Quaternion getInclinationQuat(double pitch);
         //publish camera imu angles
-        std::array<double, 2> getImuPitchandRoll();
         void ChassisTransformTmrCb();
 
         // Stereo color publish rate control
