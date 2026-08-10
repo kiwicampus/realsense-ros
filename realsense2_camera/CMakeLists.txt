@@ -389,11 +389,11 @@ install(DIRECTORY
     DESTINATION share/${PROJECT_NAME}
     )
 
-# Install example files
-install(DIRECTORY 
-    examples
+# Install the depth preset(s) applied via the json_file_path parameter
+install(DIRECTORY
+    config
     DESTINATION share/${PROJECT_NAME}
-)
+    )
 
 # Test
 if(BUILD_TESTING)

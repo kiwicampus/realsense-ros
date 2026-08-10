@@ -15,6 +15,10 @@
 #include "../include/base_realsense_node.h"
 #include <image_publisher.h>
 #include <fstream>
+#include <sstream>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <rclcpp/qos.hpp>
 #include "pointcloud_filter.h"
 #include "align_depth_filter.h"
@@ -92,39 +96,13 @@ void BaseRealSenseNode::monitoringProfileChanges()
 
 void BaseRealSenseNode::setAvailableSensors()
 {
-    _dev_sensors = _dev.query_sensors();
-    setSafetySensorIfAvailable();
-
-    if (!_json_file_path.empty())
     {
-        if (_dev.is<rs400::advanced_mode>())
-        {
-            std::stringstream ss;
-            std::ifstream in(_json_file_path);
-            if (in.is_open())
-            {
-                ss << in.rdbuf();
-                std::string json_file_content = ss.str();
-
-                auto adv = _dev.as<rs400::advanced_mode>();
-                try
-                {
-                    adv.load_json(json_file_content);
-                    ROS_INFO_STREAM("JSON file is loaded! (" << _json_file_path << ")");
-                }
-                catch (std::exception &e)
-                {
-                    ROS_WARN_STREAM("Failed to load preset from JSON: " << e.what());
-                }
-            }
-            else
-                ROS_WARN_STREAM("JSON file provided doesn't exist! (" << _json_file_path << ")");
-        }
+        std::string msg;
+        if (loadDepthPreset(msg))
+            ROS_INFO_STREAM("JSON file is loaded! (" << _json_file_path << ")");
         else
-            ROS_WARN("Device does not support advanced settings!");
+            ROS_INFO_STREAM("Depth preset not applied: " << msg);
     }
-    else
-        ROS_INFO("JSON file is not provided");
 
     auto device_name = _dev.get_info(RS2_CAMERA_INFO_NAME);
     ROS_INFO_STREAM("Device Name: " << device_name);
@@ -629,6 +607,9 @@ void BaseRealSenseNode::publishServices()
     _listener_tf2 = std::make_shared<tf2_ros::TransformListener>(*_buffer_tf2, _node.shared_from_this(), true,tf2_ros::DynamicListenerQoS(),tf2_ros::StaticListenerQoS(),  options, options);
     _shutdown_srv = _node.create_service<std_srvs::srv::Trigger>("shutdown",
                     std::bind(&BaseRealSenseNode::shutdown_callback, this, std::placeholders::_1, std::placeholders::_2));
+    _reload_preset_srv = _node.create_service<std_srvs::srv::Trigger>("reload_depth_preset",
+                    std::bind(&BaseRealSenseNode::reload_preset_callback, this,
+                              std::placeholders::_1, std::placeholders::_2));
     _get_coords_srv = _node.create_service<realsense2_camera_srvs::srv::CoordinateReq>(
             "get_coords",
             std::bind(
@@ -757,6 +738,71 @@ void BaseRealSenseNode::CalibConfigWriteService(const realsense2_camera_msgs::sr
         res->success = false;
         res->error_message = std::string("Exception occurred: ") + e.what();
     }
+}
+
+// ---------------------------------------------------------------------------
+// Runtime depth-register (advanced mode) support
+//
+// The D4 ASIC's matching and validation registers live behind the advanced-mode
+// interface. They are not rs2_options, so the ROS parameter API cannot reach
+// them and they are invisible to `ros2 param`. These services are the only
+// runtime path: they read the current register block, overwrite just the fields
+// the caller asked for, write it back, and read it out again so the caller can
+// verify what actually landed. No device reset, no stream interruption.
+// ---------------------------------------------------------------------------
+
+bool BaseRealSenseNode::loadDepthPreset(std::string& msg)
+{
+    if (_json_file_path.empty())
+    {
+        msg = "json_file_path is empty";
+        return false;
+    }
+    std::ifstream in(_json_file_path);
+    if (!in.is_open())
+    {
+        msg = "cannot open " + _json_file_path;
+        return false;
+    }
+    std::stringstream ss;
+    ss << in.rdbuf();
+    if (!_dev || !_dev.is<rs400::advanced_mode>())
+    {
+        msg = "device does not support advanced mode";
+        return false;
+    }
+    auto adv = _dev.as<rs400::advanced_mode>();
+    if (!adv.is_enabled())
+    {
+        // Not toggling it on: toggle_advanced_mode() re-enumerates the device,
+        // which would pull the handle out from under the driver.
+        msg = "advanced mode is disabled on this device; enable it out of band";
+        return false;
+    }
+    try
+    {
+        adv.load_json(ss.str());
+    }
+    catch (const std::exception& e)
+    {
+        msg = std::string("load_json rejected the preset: ") + e.what();
+        return false;
+    }
+    msg = "loaded " + _json_file_path;
+    return true;
+}
+
+void BaseRealSenseNode::reload_preset_callback(const std_srvs::srv::Trigger::Request::SharedPtr req,
+                                               std_srvs::srv::Trigger::Response::SharedPtr res)
+{
+    (void)req;
+    std::string msg;
+    res->success = loadDepthPreset(msg);
+    res->message = msg;
+    if (res->success)
+        ROS_INFO_STREAM("JSON file is loaded! (" << _json_file_path << ")");
+    else
+        ROS_WARN_STREAM("Depth preset not applied: " << msg);
 }
 
 void BaseRealSenseNode::shutdown_callback(const std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res)
