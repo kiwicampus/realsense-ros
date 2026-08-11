@@ -420,7 +420,7 @@ namespace realsense2_camera
         std::mutex _imu_callback_mutex;
         std::deque<CimuData> _imu_history;
         std::map<unsigned int, int> _image_format;
-        std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr> _info_publisher;
+        std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr> _info_publishers;
         std::map<stream_index_pair, rclcpp::Publisher<realsense2_camera_msgs::msg::Metadata>::SharedPtr> _metadata_publishers;
         std::map<stream_index_pair, rclcpp::Publisher<IMUInfo>::SharedPtr> _imu_info_publishers;
         std::map<stream_index_pair, rclcpp::Publisher<Extrinsics>::SharedPtr> _extrinsics_publishers;
@@ -431,7 +431,7 @@ namespace realsense2_camera
 
         std::map<stream_index_pair, sensor_msgs::msg::CameraInfo> _camera_info;
         std::mutex _time_base_mutex;
-        bool _is_initialized_time_base;
+        std::atomic<bool> _is_initialized_time_base;
         double _camera_time_base;
         double _previous_frame_time;
         rclcpp::Time _ros_time_base;

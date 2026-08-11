@@ -153,16 +153,6 @@ BaseRealSenseNode::BaseRealSenseNode(RosNodeBase& node,
     options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
     _static_tf_broadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(node, tf2_ros::StaticBroadcasterQoS(), options);
 
-    _image_format[1] = CV_8UC1;    // CVBridge type
-    _image_format[2] = CV_16UC1;    // CVBridge type
-    _image_format[3] = CV_8UC3;    // CVBridge type
-    _encoding[1] = sensor_msgs::image_encodings::MONO8; // ROS message type
-    _encoding[2] = sensor_msgs::image_encodings::TYPE_16UC1; // ROS message type
-    _encoding[3] = sensor_msgs::image_encodings::RGB8; // ROS message type
-    
-    // Infrared stream
-    _format[RS2_STREAM_INFRARED] = RS2_FORMAT_Y8;
-
     initializeFormatsMaps();
     _monitor_options = {RS2_OPTION_ASIC_TEMPERATURE, RS2_OPTION_PROJECTOR_TEMPERATURE};
 
@@ -220,8 +210,8 @@ void BaseRealSenseNode::publishTopics()
     setup();
     // Kiwi added virtual cam
     if (_color_virtual_cam >= 0 ){
-        _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
-        _stream_intrinsics[COLOR].width, _stream_intrinsics[COLOR].height);
+        _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam),
+        _camera_info[COLOR].width, _camera_info[COLOR].height);
     }
 
     // Initialize stereo color publish timer if custom rate is enabled
@@ -611,6 +601,10 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
 }
 
 std::array<double, 2> BaseRealSenseNode::getImuPitchandRoll() {
+    if (_imu_accel_x_vector.empty())
+    {
+        return {0.0, 0.0};
+    }
     double accel_x = std::accumulate(_imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0) / _imu_accel_x_vector.size();
     double accel_y = std::accumulate(_imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0) / _imu_accel_y_vector.size();
     double accel_z = std::accumulate(_imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0) / _imu_accel_z_vector.size();
@@ -722,33 +716,22 @@ void BaseRealSenseNode::imu_callback(rs2::frame frame)
     publishMetadata(frame, t, OPTICAL_FRAME_ID(stream_index));
 }
 
-// Kiwibot: average buffered ACCEL samples and derive (pitch, roll) in radians.
-std::array<double, 2> BaseRealSenseNode::getImuPitchandRoll()
-{
-    if (_imu_accel_x_vector.empty())
-    {
-        return {0.0, 0.0};
-    }
-    const double accel_x = std::accumulate(_imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0)
-                           / _imu_accel_x_vector.size();
-    const double accel_y = std::accumulate(_imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0)
-                           / _imu_accel_y_vector.size();
-    const double accel_z = std::accumulate(_imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0)
-                           / _imu_accel_z_vector.size();
-    const double pitch = std::atan2(accel_z, std::sqrt(accel_x * accel_x + accel_y * accel_y));
-    const double roll  = std::atan2(-accel_x, std::sqrt(accel_y * accel_y + accel_z * accel_z));
-    return {pitch, roll};
-}
-
 // Kiwibot: re-buffer ACCEL samples and publish (pitch, roll) as a latched Quaternion.
-void BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr /*req*/,
+bool BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::SharedPtr /*req*/,
                                          std_srvs::srv::Trigger::Response::SharedPtr res)
 {
     if (!_is_accel_enabled)
     {
-        res->success = false;
-        res->message = "Camera calibration could not take place because ACCEL stream is not enabled";
-        return;
+        // Kiwibot: no ACCEL stream to calibrate from (IMU disabled) — fall back to the
+        // statically configured STEREO_PITCH_ANGLE/STEREO_ROLL_ANGLE env vars.
+        tf2::Quaternion q;
+        q.setRPY(_cam_roll, _cam_pitch, _cam_yaw);
+        geometry_msgs::msg::Quaternion q_msg = tf2::toMsg(q);
+        _cam_imu_angles_publisher->publish(q_msg);
+
+        res->success = true;
+        res->message = "Camera angle was calibrated using ENV VAR.";
+        return true;
     }
 
     _imu_accel_initiated = false;
@@ -767,7 +750,7 @@ void BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
     {
         res->success = false;
         res->message = "Camera calibration timed out waiting for ACCEL samples";
-        return;
+        return false;
     }
 
     const auto angles = getImuPitchandRoll();
@@ -783,6 +766,7 @@ void BaseRealSenseNode::calibrate_imu_cb(std_srvs::srv::Trigger::Request::Shared
 
     res->success = true;
     res->message = "PITCH=" + std::to_string(cam_pitch) + " ROLL=" + std::to_string(cam_roll);
+    return true;
 }
 
 // Kiwibot: hardware-reset Trigger. Kronos remaps this to /stereo/restart.
@@ -1122,16 +1106,6 @@ void BaseRealSenseNode::multiple_message_callback(rs2::frame frame, imu_sync_met
 
 uint64_t BaseRealSenseNode::millisecondsToNanoseconds(double timestamp_ms)
 {
-    double int_part_ms, fract_part_ms;
-    fract_part_ms = modf(timestamp_ms, &int_part_ms);
-    uint64_t int_part_ns = static_cast<uint64_t>(int_part_ms) * 1000000;
-    uint64_t fract_part_ns = static_cast<uint64_t>(fract_part_ms * 10000000);
-    fract_part_ns = (fract_part_ns % 10 > 4) ? (fract_part_ns / 10 + 1) : (fract_part_ns / 10);
-    return int_part_ns + fract_part_ns;
-}
-
-uint64_t BaseRealSenseNode::millisecondsToNanoseconds(double timestamp_ms)
-{
         // modf breaks input into an integral and fractional part
         double int_part_ms, fract_part_ms;
         fract_part_ms = modf(timestamp_ms, &int_part_ms);
@@ -1334,7 +1308,7 @@ void BaseRealSenseNode::publishPointCloud(rs2::points pc, const rclcpp::Time& t,
     // see the cadence rather than the (stale) sensor capture time.
     const rclcpp::Time pub_t = (_stereo_depth_publish_rate > 0.0) ? _node.now() : t;
     std::string frame_id = OPTICAL_FRAME_ID(DEPTH);
-    _pc_filter->Publish(pc, pub_t, frameset, frame_id);
+    _pc_filter->Publish(pc, pub_t, frameset, frame_id, true);
 }
 
 // Kiwibot: stream throttle. Returns true if rate<=0 (no throttling) or enough time has elapsed

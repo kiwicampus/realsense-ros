@@ -33,6 +33,7 @@ namespace realsense2_camera
 
             void setPublisher();
             void Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id, bool publish_immediately);
+            rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr getPointcloudPublisher() const { return _pointcloud_publisher; }
 
             // Kiwibot: pixel→3D lookup against the most recent depth frame.
             // Returns false if no frame has been cached yet. Pixels outside the depth image
