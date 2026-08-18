@@ -115,6 +115,7 @@ find_package(realsense2_camera_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(shm_ros REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
@@ -251,6 +252,7 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 set(dependencies
+  shm_ros
   cv_bridge
   image_transport
   rclcpp
@@ -266,6 +268,8 @@ set(dependencies
 )
 
 set (targets
+  shm_ros::shm_ros_core
+  ${shm_ros_TARGETS}
   cv_bridge::cv_bridge
   image_transport::image_transport
   rclcpp::rclcpp

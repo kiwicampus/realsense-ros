@@ -32,6 +32,10 @@ void BaseRealSenseNode::getParameters()
     _publish_tf = _parameters->setParam<bool>(param_name, PUBLISH_TF);
     _parameters_names.push_back(param_name);
 
+    param_name = std::string("publish_shm");
+    _publish_shm = _parameters->setParam<bool>(param_name, true);
+    _parameters_names.push_back(param_name);
+
     param_name = std::string("tf_publish_rate");
     _parameters->setParamT(param_name, _tf_publish_rate, [this](const rclcpp::Parameter& )
             {

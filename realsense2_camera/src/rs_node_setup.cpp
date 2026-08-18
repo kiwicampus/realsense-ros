@@ -264,6 +264,17 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
             }
             #endif
 
+            // Layer shared memory over whichever publisher was chosen: the plain
+            // image topic keeps working and the frame also lands in a segment,
+            // announced on a sibling topic that astribot readers understand.
+            if (_publish_shm)
+            {
+                std::stringstream shm_topic;
+                shm_topic << image_raw.str() << "_shm";
+                _image_publishers[sip] = std::make_shared<image_shm_publisher>(
+                    _node, shm_topic.str(), qos, _image_publishers[sip]);
+            }
+
 
             _info_publishers[sip] = _node.create_publisher<sensor_msgs::msg::CameraInfo>(camera_info.str(),
                                     rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(info_qos), info_qos));
