@@ -12,6 +12,8 @@
 #include <image_transport/image_transport.hpp>
 #endif
 
+#include <shm_ros/publisher.hpp>
+
 namespace realsense2_camera {
 class image_publisher
 {
@@ -47,6 +49,26 @@ public:
 
 private:
     std::shared_ptr< image_transport::Publisher > image_publisher_impl;
+};
+
+// Kiwi added: layers shm_ros::ImagePublisher OVER one of the publishers above, so the
+// normal image topic keeps working and the frame also lands in a shared-memory segment
+// announced on a sibling "<topic>_shm" topic. Ported from robot-os.
+class image_shm_publisher : public image_publisher
+{
+public:
+    image_shm_publisher( rclcpp::Node & node,
+                         const std::string & topic_name,
+                         const rmw_qos_profile_t & qos,
+                         std::shared_ptr< image_publisher > inner );
+    void publish( sensor_msgs::msg::Image::UniquePtr image_ptr ) override;
+    // Counts the announcement's subscribers too, otherwise the driver skips the frame
+    // when only shared-memory consumers listen.
+    size_t get_subscription_count() const override;
+
+private:
+    std::shared_ptr< image_publisher > _inner;
+    shm_ros::ImagePublisher _shm;
 };
 
 }  // namespace realsense2_camera

@@ -108,6 +108,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(diagnostic_updater REQUIRED)
+find_package(shm_ros REQUIRED)
 
 find_package(realsense2 2.57.3)
 if(NOT realsense2_FOUND)
@@ -201,6 +202,7 @@ add_library(${PROJECT_NAME} SHARED
 
 target_link_libraries(${PROJECT_NAME}
     ${realsense2_LIBRARY}
+    shm_ros::shm_ros_core
     )
 
 set(dependencies
@@ -220,6 +222,7 @@ set(dependencies
   tf2_ros
   tf2_geometry_msgs
   diagnostic_updater
+  shm_ros
 )
 
 ament_target_dependencies(${PROJECT_NAME}

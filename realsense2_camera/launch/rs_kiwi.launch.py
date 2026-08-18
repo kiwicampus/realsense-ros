@@ -69,6 +69,7 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'camera_link_z',                'default': '0.404', 'description': 'z translation between base frame and camera'},   
                            {'name': 'stereo_color_publish_rate',    'default': '-1.0', 'description': 'Custom publish rate for stereo color stream. -1 means use default FPS'},
                            {'name': 'stereo_depth_publish_rate',    'default': '-1.0', 'description': 'Custom publish rate for stereo depth stream. -1 means use default FPS'},
+                           {'name': 'publish_shm',                  'default': os.getenv('REALSENSE_PUBLISH_SHM', 'false'), 'description': 'Also publish images through shm_ros shared memory on <topic>_shm'},
                            {'name': 'pc_subsample_fct',             'default': '8', 'description': 'Factor used for subsampling the pointcloud. 1 uses the default density'},
                            {'name': 'color_qos',                    'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    
                            {'name': 'confidence_qos',               'default': 'SENSOR_DATA', 'description': 'QoS profile name'},    

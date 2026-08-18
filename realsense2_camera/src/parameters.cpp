@@ -95,6 +95,11 @@ void BaseRealSenseNode::getParameters()
     param_name = std::string("stereo_depth_publish_rate");
     _stereo_depth_publish_rate = _parameters->setParam<double>(param_name, -1.0); // -1 means use default FPS
     _parameters_names.push_back(param_name);
+
+    // Kiwi added: also publish images through shm_ros shared memory on "<topic>_shm"
+    param_name = std::string("publish_shm");
+    _publish_shm = _parameters->setParam<bool>(param_name, false);
+    _parameters_names.push_back(param_name);
 }
 
 void BaseRealSenseNode::setDynamicParams()

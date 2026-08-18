@@ -213,6 +213,12 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
                 _image_publishers[sip] = std::make_shared<image_transport_publisher>(_node, image_raw.str(), qos);
                 ROS_DEBUG_STREAM("image transport publisher was created for topic" << image_raw.str());
             }
+            // Kiwi added: also write the frame to shared memory, announced on "<topic>_shm"
+            if (_publish_shm)
+            {
+                _image_publishers[sip] = std::make_shared<image_shm_publisher>(
+                    _node, image_raw.str() + "_shm", qos, _image_publishers[sip]);
+            }
 
             _info_publisher[sip] = _node.create_publisher<sensor_msgs::msg::CameraInfo>(camera_info.str(), 
                                     rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(info_qos), info_qos));
@@ -236,6 +242,11 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
                 {
                     _depth_aligned_image_publishers[sip] = std::make_shared<image_transport_publisher>(_node, aligned_image_raw.str(), qos);
                     ROS_DEBUG_STREAM("image transport publisher was created for topic" << image_raw.str());
+                }
+                if (_publish_shm)
+                {
+                    _depth_aligned_image_publishers[sip] = std::make_shared<image_shm_publisher>(
+                        _node, aligned_image_raw.str() + "_shm", qos, _depth_aligned_image_publishers[sip]);
                 }
                 _depth_aligned_info_publisher[sip] = _node.create_publisher<sensor_msgs::msg::CameraInfo>(aligned_camera_info.str(),
                                                       rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(info_qos), info_qos));
