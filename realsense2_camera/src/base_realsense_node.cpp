@@ -10,6 +10,8 @@
 #include <rclcpp/clock.hpp>
 #include <fstream>
 #include <image_publisher.h>
+#include <profile_manager.h>
+#include <ros_utils.h>
 
 using namespace realsense2_camera;
 
@@ -92,7 +94,9 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     _stereo_depth_publish_rate(-1.0),
     _stereo_depth_frame_available(false),
     _stereo_pointcloud_frame_available(false),
-    _previous_frame_time(0.0)
+    _previous_frame_time(0.0),
+    _use_shm(false),
+    _use_shm_gpu(false)
 {
 
     // Kiwi added: allow static tf with intra process
@@ -196,7 +200,8 @@ void BaseRealSenseNode::stereoColorPublishTimerCallback()
         auto color_publisher_it = _image_publishers.find(COLOR);
         if (color_publisher_it != _image_publishers.end())
         {
-            // Update timestamp and move the frame to avoid copying
+            // Update timestamp and move the frame to avoid copying. The shm write (if
+            // _use_shm) happens inside publish() itself -- see image_shm_publisher.
             _latest_stereo_color_frame->header.stamp = _node.now();
             color_publisher_it->second->publish(std::move(_latest_stereo_color_frame));
         }
@@ -212,7 +217,8 @@ void BaseRealSenseNode::stereoDepthPublishTimerCallback()
         auto depth_publisher_it = _depth_aligned_image_publishers.find(COLOR);
         if (depth_publisher_it != _depth_aligned_image_publishers.end())
         {
-            // Update timestamp and move the frame to avoid copying
+            // Update timestamp and move the frame to avoid copying. The shm write (if
+            // _use_shm) happens inside publish() itself -- see image_shm_publisher.
             _latest_stereo_depth_frame->header.stamp = _node.now();
             depth_publisher_it->second->publish(std::move(_latest_stereo_depth_frame));
         }
@@ -685,7 +691,7 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                             _depth_aligned_image,
                             _depth_aligned_info_publisher,
                             _depth_aligned_image_publishers,
-                            false);
+                            /*is_publishMetadata=*/false);
                     continue;
                 }
             }
@@ -701,7 +707,7 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                 frame_to_send = _colorizer_filter->Process(original_depth_frame);
             else
                 frame_to_send = original_depth_frame;
-                
+
             publishFrame(frame_to_send, t,
                         DEPTH,
                         _image,
@@ -1278,8 +1284,9 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
         // Transfer the unique pointer ownership to the RMW
         sensor_msgs::msg::Image* msg_address = img.get();
         
-        // Only publish immediately if custom publish rate is not enabled for color or depth stream
-        if ((is_color_stream && _stereo_color_publish_rate <= 0.0) || 
+        // Only publish immediately if custom publish rate is not enabled for color or depth stream.
+        // The shm write (if _use_shm) happens inside publish() itself -- see image_shm_publisher.
+        if ((is_color_stream && _stereo_color_publish_rate <= 0.0) ||
             (is_depth_stream && _stereo_depth_publish_rate <= 0.0))
         {
             image_publisher->publish(std::move(img));

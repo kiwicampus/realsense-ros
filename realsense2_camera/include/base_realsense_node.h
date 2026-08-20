@@ -289,9 +289,16 @@ namespace realsense2_camera
         std::vector<geometry_msgs::msg::TransformStamped> _static_tf_msgs;
         std::shared_ptr<std::thread> _tf_t;
 
-        bool _use_intra_process;      
+        bool _use_intra_process;
         std::map<stream_index_pair, std::shared_ptr<image_publisher>> _image_publishers;
-        
+
+        // shm_ros (Kiwi addition): when _use_shm, startPublishers() wraps each entry of
+        // _image_publishers/_depth_aligned_image_publishers in an image_shm_publisher
+        // decorator (see image_publisher.h) instead of populating a separate map here --
+        // publishFrame()/get_subscription_count() never need to know shm exists.
+        bool _use_shm;
+        bool _use_shm_gpu;
+
         std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> _imu_publishers;
         std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Odometry>> _odom_publisher;
         std::shared_ptr<SyncedImuPublisher> _synced_imu_publisher;

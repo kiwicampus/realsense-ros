@@ -95,6 +95,15 @@ void BaseRealSenseNode::getParameters()
     param_name = std::string("stereo_depth_publish_rate");
     _stereo_depth_publish_rate = _parameters->setParam<double>(param_name, -1.0); // -1 means use default FPS
     _parameters_names.push_back(param_name);
+
+    // Kiwi added: shm_ros parameters
+    param_name = std::string("use_shm");
+    _use_shm = _parameters->setParam<bool>(param_name, false);
+    _parameters_names.push_back(param_name);
+
+    param_name = std::string("use_shm_gpu");
+    _use_shm_gpu = _parameters->setParam<bool>(param_name, false);
+    _parameters_names.push_back(param_name);
 }
 
 void BaseRealSenseNode::setDynamicParams()

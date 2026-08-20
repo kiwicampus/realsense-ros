@@ -164,6 +164,8 @@ void BaseRealSenseNode::stopPublishers(const std::vector<stream_profile>& profil
         stream_index_pair sip(profile.stream_type(), profile.stream_index());
         if (profile.is<rs2::video_stream_profile>())
         {
+            // Erasing an image_shm_publisher runs its destructor, which closes/unlinks the
+            // shm segment along with the rest of the publisher.
             _image_publishers.erase(sip);
             _info_publisher.erase(sip);
             _depth_aligned_image_publishers.erase(sip);
@@ -214,8 +216,17 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
                 ROS_DEBUG_STREAM("image transport publisher was created for topic" << image_raw.str());
             }
 
-            _info_publisher[sip] = _node.create_publisher<sensor_msgs::msg::CameraInfo>(camera_info.str(), 
+            _info_publisher[sip] = _node.create_publisher<sensor_msgs::msg::CameraInfo>(camera_info.str(),
                                     rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(info_qos), info_qos));
+
+            // Layer shared memory over whichever publisher was chosen: the plain image
+            // topic keeps working and the frame also lands in a segment, announced on a
+            // sibling "/shm" topic.
+            if (_use_shm)
+            {
+                _image_publishers[sip] = std::make_shared<image_shm_publisher>(
+                    _node, image_raw.str() + "/shm", qos, _image_publishers[sip], _use_shm_gpu);
+            }
 
             if (_align_depth_filter->is_enabled() && (sip != DEPTH) && sip.second < 2)
             {
@@ -239,6 +250,12 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
                 }
                 _depth_aligned_info_publisher[sip] = _node.create_publisher<sensor_msgs::msg::CameraInfo>(aligned_camera_info.str(),
                                                       rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(info_qos), info_qos));
+
+                if (_use_shm)
+                {
+                    _depth_aligned_image_publishers[sip] = std::make_shared<image_shm_publisher>(
+                        _node, aligned_image_raw.str() + "/shm", qos, _depth_aligned_image_publishers[sip], _use_shm_gpu);
+                }
             }
         }
         else if (profile.is<rs2::motion_stream_profile>())
