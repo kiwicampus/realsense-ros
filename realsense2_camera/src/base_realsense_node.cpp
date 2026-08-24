@@ -546,12 +546,6 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
     auto stream_index = (stream == GYRO.first)?GYRO:ACCEL;
     double frame_time = frame.get_timestamp();
 
-    bool placeholder_false(false);
-    if (_is_initialized_time_base.compare_exchange_strong(placeholder_false, true) )
-    {
-        _is_initialized_time_base = setBaseTime(frame_time, frame.get_frame_timestamp_domain());
-    }
-
     // Kiwibot: collect ACCEL samples for IMU-driven stereo calibration.
     if (stream_index == ACCEL && !_imu_accel_initiated)
     {
