@@ -279,18 +279,6 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
                 image_raw << "~/" << stream_name << "/image_" << ((rectified_image)?"rect_":"") << "raw";
                 camera_info << "~/" << stream_name << "/camera_info";
 
-                // Layer shared memory over whichever publisher was chosen: the plain
-                // image topic keeps working and the frame also lands in a segment,
-                // announced on a sibling topic that astribot readers understand.
-                if (_publish_shm)
-                {
-                    std::stringstream shm_topic;
-                    shm_topic << image_raw.str() << "_shm";
-                    _image_publishers[sip] = std::make_shared<image_shm_publisher>(
-                        _node, shm_topic.str(), qos, _image_publishers[sip]);
-                }
-
-
                 // We can use 2 types of publishers:
                 // 1. Native RCL publisher (supports intra-process zero-copy communication)
                 // 2. Image-transport package publisher (adds a compressed image topic if installed)
@@ -310,6 +298,17 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
                     ROS_DEBUG_STREAM("image transport publisher was created for topic" << image_raw.str());
                 }
                 #endif
+
+                // Layer shared memory over whichever publisher was chosen: the plain
+                // image topic keeps working and the frame also lands in a segment,
+                // announced on a sibling topic that astribot readers understand.
+                if (_publish_shm)
+                {
+                    std::stringstream shm_topic;
+                    shm_topic << image_raw.str() << "_shm";
+                    _image_publishers[sip] = std::make_shared<image_shm_publisher>(
+                        _node, shm_topic.str(), qos, _image_publishers[sip]);
+                }
 
                 // create cameraInfo publishers only for non-SC streams
                 if(shouldPublishCameraInfo(sip))
