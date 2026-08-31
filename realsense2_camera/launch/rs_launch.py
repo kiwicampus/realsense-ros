@@ -1,4 +1,4 @@
-# Copyright 2023 Intel Corporation. All Rights Reserved.
+# Copyright 2023 RealSense, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -61,12 +61,14 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'depth_module.inter_cam_sync_mode',               'default': "0", 'description': '[0-Default, 1-Master, 2-Slave]'},
                            {'name': 'enable_rgbd',                  'default': 'false', 'description': "'enable rgbd topic'"},
                            {'name': 'enable_gyro',                  'default': 'false', 'description': "'enable gyro stream'"},
-                           {'name': 'enable_accel',                 'default': 'false', 'description': "'enable accel stream'"},
-                           {'name': 'gyro_fps',                     'default': '0', 'description': "''"},
+                           {'name': 'enable_accel',                 'default': 'false', 'description': "'enable accel stream'"},                           
                            {'name': 'enable_motion',                'default': 'false', 'description': "'enable motion stream (IMU) for DDS devices'"},
+                           {'name': 'gyro_fps',                     'default': '0', 'description': "''"},
                            {'name': 'accel_fps',                    'default': '0', 'description': "''"},
+                           {'name': 'motion_fps',                   'default': '0', 'description': "'motion stream samples per second'"},
                            {'name': 'unite_imu_method',             'default': "0", 'description': '[0-None, 1-copy, 2-linear_interpolation]'},
                            {'name': 'clip_distance',                'default': '-2.', 'description': "''"},
+                           {'name': 'occupancy_max_range',          'default': '2.5', 'description': "'max reliable range for occupancy raycasting in meters; cells beyond this are unknown (-1)'"},
                            {'name': 'angular_velocity_cov',         'default': '0.01', 'description': "''"},
                            {'name': 'linear_accel_cov',             'default': '0.01', 'description': "''"},
                            {'name': 'diagnostics_period',           'default': '0.0', 'description': 'Rate of publishing diagnostics. 0=Disabled'},
@@ -90,6 +92,14 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'wait_for_device_timeout',      'default': '-1.', 'description': 'Timeout for waiting for device to connect (Seconds)'},
                            {'name': 'reconnect_timeout',            'default': '6.', 'description': 'Timeout(seconds) between consequtive reconnection attempts'},
                            {'name': 'base_frame_id',                'default': 'link', 'description': 'Root frame of the sensors transform tree'},
+                           {'name': 'tf_prefix',                    'default': '', 'description': 'prefix to be prepended to all frame IDs'},
+                           {'name': 'decimation_filter.filter_magnitude', 'default': '2', 'description': 'decimation filter magnitude'},
+                           {'name': 'enable_safety',                'default': 'false', 'description': "'enable safety stream'"},
+                           {'name': 'safety_camera.safety_mode',    'default': '0', 'description': '[int] 0-Run, 1-Standby, 2-Service'},
+                           {'name': 'enable_labeled_point_cloud',   'default': 'false', 'description': "'enable labeled point cloud stream'"},
+                           {'name': 'depth_mapping_camera.labeled_point_cloud_profile', 'default': '0,0,0', 'description': "'Label PointCloud stream profile'"},
+                           {'name': 'enable_occupancy',             'default': 'false', 'description': "'enable occupancy stream'"},
+                           {'name': 'depth_mapping_camera.occupancy_profile', 'default': '0,0,0', 'description': "'Occupancy stream profile'"},
                           ]
 
 def declare_configurable_parameters(parameters):
@@ -105,6 +115,21 @@ def yaml_to_dict(path_to_yaml):
 def launch_setup(context, params, param_name_suffix=''):
     _config_file = LaunchConfiguration('config_file' + param_name_suffix).perform(context)
     params_from_file = {} if _config_file == "''" else yaml_to_dict(_config_file)
+
+    # Get list of supported parameters
+    supported_params = set(param['name'] for param in configurable_parameters)
+    
+    # Check for unsupported parameters in command line arguments
+    # Warn for any launch arguments not in supported_params
+    for param_name in context.launch_configurations.keys():
+        if param_name not in supported_params:
+            print(f"\033[33mWarning: Parameter '{param_name}' is not supported. Supported parameters are:\n{sorted(supported_params)}\033[0m")
+    
+    # Check for unsupported parameters in config file
+    if params_from_file:
+        for param_name in params_from_file.keys():
+            if param_name not in supported_params:
+                print(f"\033[33mWarning: Parameter '{param_name}' in config file is not supported. Supported parameters are:\n{sorted(supported_params)}\033[0m")
 
     # Load lifecycle nodes setting from YAML dynamically generated by CMAKE instead of environment variable
     lifecycle_param_file = os.path.join(

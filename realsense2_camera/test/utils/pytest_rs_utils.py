@@ -1,4 +1,4 @@
-# Copyright 2023 Intel Corporation. All Rights Reserved.
+# Copyright 2023 RealSense, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -95,8 +95,8 @@ class RosbagManager(object):
         return cls.instance
     def init(self):
         self.rosbag_files = {
-                "outdoors_1color.bag":"https://librealsense.intel.com/rs-tests/TestData/outdoors_1color.bag",
-                "D435i_Depth_and_IMU_Stands_still.bag":"https://librealsense.intel.com/rs-tests/D435i_Depth_and_IMU_Stands_still.bag"
+                "outdoors_1color.bag":"https://librealsense.realsenseai.com/rs-tests/TestData/outdoors_1color.bag",
+                "D435i_Depth_and_IMU_Stands_still.bag":"https://librealsense.realsenseai.com/rs-tests/D435i_Depth_and_IMU_Stands_still.bag"
                 }
         self.rosbag_location = os.getenv("HOME") + "/realsense_records/" 
         print(self.rosbag_location)
@@ -386,13 +386,14 @@ def extrinsicsTest(data, gt_data):
 def metadatTest(data, gt_data):
     jdata = json.loads(data.json_data)
     gt_jdata = json.loads(gt_data.json_data)
-    if jdata['frame_number'] != gt_jdata['frame_number']:
+
+    if 'frame_number' in gt_jdata and jdata['frame_number'] != gt_jdata['frame_number']:
         msg = 'Frame no not matching: ' + str(jdata['frame_number']) + " and " + str(gt_jdata['frame_number'])
         return False, msg
-    if jdata['clock_domain'] != gt_jdata['clock_domain']:
+    if 'clock_domain' in gt_jdata and jdata['clock_domain'] != gt_jdata['clock_domain']:
         msg = 'clock_domain not matching: ' + str(jdata['clock_domain']) + " and " + str(gt_jdata['clock_domain'])
         return False, msg
-    if jdata['frame_timestamp'] != gt_jdata['frame_timestamp']:
+    if 'frame_timestamp' in gt_jdata and jdata['frame_timestamp'] != gt_jdata['frame_timestamp']:
         msg = 'frame_timestamp not matching: ' + str(jdata['frame_timestamp']) + " and " + str(gt_jdata['frame_timestamp'])
         return False, msg
     '''
@@ -403,9 +404,13 @@ def metadatTest(data, gt_data):
         msg = 'frame_counter not matching: ' + str(jdata['frame_counter']) + " and " + str(gt_jdata['frame_counter'])
         return False, msg
     '''
-    if jdata['time_of_arrival'] != gt_jdata['time_of_arrival']:
+    if 'time_of_arrival' in gt_jdata and jdata['time_of_arrival'] != gt_jdata['time_of_arrival']:
         msg = 'time_of_arrival not matching: ' + str(jdata['time_of_arrival']) + " and " + str(gt_jdata['time_of_arrival'])
         return False, msg
+    if 'actual_exposure' in gt_jdata and jdata['actual_exposure'] != gt_jdata['actual_exposure']:
+        msg = 'actual_exposure not matching: ' + str(jdata['actual_exposure']) + " and " + str(gt_jdata['actual_exposure'])
+        return False, msg
+
     return True, ""
     
 
@@ -995,6 +1000,22 @@ class RsTestBaseClass():
             if res[couple] == None:
                 return False, str(couple) + ": didn't get any tf data"
         return True,""
+
+    def check_static_transform_data(self, topic, frame_ids):
+        # /tf_static is latched and the node resets its static broadcaster when
+        # (re)publishing, so the first message received can be incomplete.
+        # Aggregate the transforms from ALL received messages before checking,
+        # to avoid a flaky race.
+        coupled_frame_ids = [xx for xx in itertools.combinations(frame_ids, 2)]
+        tfBuffer = tf2_ros.Buffer()
+        while self.node.get_num_chunks(topic) > 0:
+            for transform in self.node.pop_first_chunk(topic).transforms:
+                tfBuffer.set_transform_static(transform, "default_authority")
+        for couple in coupled_frame_ids:
+            from_id, to_id = couple
+            if not tfBuffer.can_transform(from_id, to_id, rclpy.time.Time(), rclpy.time.Duration(nanoseconds=3e6)):
+                return False, str(couple) + ": didn't get any tf data"
+        return True, ""
     
     '''
     Please override and use your own process_data if the default check is not suitable.
