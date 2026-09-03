@@ -87,6 +87,8 @@ void BaseRealSenseNode::monitoringProfileChanges()
 
 void BaseRealSenseNode::setAvailableSensors()
 {
+    _dev_sensors = _dev.query_sensors();   // dropped in the kiwi merge; without it no RosSensor is created ("No known base_stream")
+
     {
         std::string msg;
         if (loadDepthPreset(msg))
