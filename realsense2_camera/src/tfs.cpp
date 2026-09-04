@@ -275,7 +275,7 @@ void BaseRealSenseNode::publishDynamicTransforms()
             {
                 for(auto& msg : _static_tf_msgs)
                     msg.header.stamp = t;
-                _dynamic_tf_broadcaster->sendTransform(_static_tf_msgs);
+                _static_tf_broadcaster->sendTransform(_static_tf_msgs);  // port of 5240cc66: extrinsics on /tf_static
             }
             catch(const std::exception& e)
             {
