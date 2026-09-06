@@ -21,9 +21,15 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'json_file_path',               'default': "''", 'description': 'allows advanced configuration'},
                            {'name': 'log_level',                    'default': 'info', 'description': 'debug log level [DEBUG|INFO|WARN|ERROR|FATAL]'},
                            {'name': 'output',                       'default': 'screen', 'description': 'pipe node output [screen|log]'},
-                           {'name': 'depth_module.profile',         'default': '848,480,15', 'description': 'depth module profile'},                           
+                           # realsense-ros >= 4.55 builds the profile parameter name as
+                           # "<module>.<stream>_profile" (profile_manager.cpp registerVideoSensorProfileFormat),
+                           # so the pre-4.55 names 'depth_module.profile' / 'rgb_camera.profile' are never read
+                           # and every stream silently falls back to the driver default. Verified 2026-09-06:
+                           # colour ran at 1280x720x30 instead of the requested 640x360x15.
+                           {'name': 'depth_module.depth_profile',   'default': '848,480,15', 'description': 'depth stream profile'},
+                           {'name': 'depth_module.infra_profile',   'default': '848,480,15', 'description': 'infra streams (0/1/2) profile'},
                            {'name': 'enable_depth',                 'default': 'true', 'description': 'enable depth stream'},
-                           {'name': 'rgb_camera.profile',           'default': '640,360,15', 'description': 'color image width'},
+                           {'name': 'rgb_camera.color_profile',     'default': '640,360,15', 'description': 'color stream profile'},
                            {'name': 'enable_color',                 'default': 'true', 'description': 'enable color stream'},
                            {'name': 'enable_infra1',                'default': 'false', 'description': 'enable infra1 stream'},
                            {'name': 'enable_infra2',                'default': 'false', 'description': 'enable infra2 stream'},
