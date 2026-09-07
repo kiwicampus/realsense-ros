@@ -369,14 +369,28 @@ void BaseRealSenseNode::setupFilters()
     _pc_filter = std::make_shared<PointcloudFilter>(std::make_shared<rs2::pointcloud>(), _node, _parameters, _logger);
 #endif
 
-    // Apply PointCloud filter before applying Align-depth as it requires original depth image not aligned-depth image.
-    _filters.push_back(_pc_filter);
-
+    /* KIWI DEVIATION FROM UPSTREAM - do not "fix" this back to upstream order.
+       Upstream applies the PointCloud filter BEFORE Align-Depth, with the rationale that the
+       pointcloud wants the original (unaligned) depth image. We deliberately apply Align-Depth
+       first, so the cloud is generated from the colour-aligned depth and therefore comes out at
+       the colour resolution.
+       PointCloudSegmentationProcessorNode::sync_img_pc_callback indexes the cloud by the
+       segmentation mask's pixel index (index = i * width + j), so it requires the cloud and the
+       mask to have identical dimensions. With the upstream order the cloud is built from the raw
+       decimated depth (40x23 with STEREO_DECIMATION_ORDER=4) while the mask is 160x90, the size
+       check fails, the callback early-returns on every frame, and
+       /pointcloud_segmentation_processor/pointcloud never publishes at all. That silently starves
+       nav2's rgbd_od_mark STVL source (marking: true) whenever NAV2_USE_SEGMENTATION_MAP=1.
+       This ordering matches develop (submodule 5240cc66); it was lost in 5579e15b when the Kiwi
+       fork features were ported onto upstream ros2-development for jazzy. */
     _align_depth_filter = std::make_shared<AlignDepthFilter>(std::make_shared<rs2::align>(RS2_STREAM_COLOR), update_align_depth_func, _parameters, _logger);
     _filters.push_back(_align_depth_filter);
 
     // Apply Colorizer filter after applying Align-Depth to get colorized aligned depth image.
     _filters.push_back(_colorizer_filter);
+
+    // Cloud last, so it is generated from the aligned depth (see the deviation note above).
+    _filters.push_back(_pc_filter);
 }
 
 cv::Mat& BaseRealSenseNode::fix_depth_scale(const cv::Mat& from_image, cv::Mat& to_image)
