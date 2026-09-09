@@ -134,12 +134,34 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
                                             (available_formats.find(f.get_profile().format()) != available_formats.end()); });
         if (texture_frame_itr == frameset.end())
         {
+            // Kiwibot: fall back to an UNTEXTURED cloud instead of dropping the frame.
+            //
+            // This used to `return`, so a missing texture stream suppressed the pointcloud
+            // entirely - geometry included - behind a warning that only prints once every
+            // DISPLAY_WARN_NUMBER frames. Texture is cosmetic; the geometry is what nav2's
+            // STVL marking, elevation_mapping and pointcloud_processor actually consume, and
+            // losing all of it because a colour frame is missing is never the right trade.
+            //
+            // Measured on kiwibot4F042 (2026-09-09): with pointcloud.stream_filter set to
+            // color(2) the colour frame is not in the same frameset as the depth frame, so
+            // this branch ran on every frame and /camera/depth/color/points_raw published
+            // 14720 points with z>0 on 0.0% of them, while /camera/depth/image_rect_raw was
+            // 83% valid the whole time. The same happened with stream_filter left at ANY once
+            // both infrared streams were disabled. Either way the depth was fine and the cloud
+            // was thrown away.
             warn_count++;
             std::string texture_source_name = _filter->get_option_value_description(rs2_option::RS2_OPTION_STREAM_FILTER, static_cast<float>(texture_source_id));
-            ROS_WARN_STREAM_COND(warn_count == DISPLAY_WARN_NUMBER, "No stream match for pointcloud chosen texture " << texture_source_name);
-            return;
+            ROS_WARN_STREAM_COND(warn_count == DISPLAY_WARN_NUMBER,
+                                 "No stream match for pointcloud chosen texture " << texture_source_name
+                                 << ". Publishing the cloud without texture. Set 'pointcloud.stream_filter' to a "
+                                    "stream that is enabled and arrives in the same frameset as depth.");
+            use_texture = false;
+            texture_frame_itr = frameset.end();
         }
-        warn_count = 0;
+        else
+        {
+            warn_count = 0;
+        }
     } 
     else {
         warn_count++;
