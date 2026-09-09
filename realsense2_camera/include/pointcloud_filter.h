@@ -52,14 +52,26 @@ namespace realsense2_camera
         private:
             void setParameters();
 
+            // Kiwibot: resolve the ORIGINAL (pre decimation) depth resolution once, from the
+            // depth_module.depth_profile parameter. Leaves the members at 0 when it cannot be
+            // read, which keeps the legacy stride-only behaviour.
+            void resolveOriginalDepthSize();
+
         private:
             bool _is_enabled_pc;
             RosNodeBase& _node;
             bool _allow_no_texture_points;
             bool _ordered_pc;
-            // Kiwibot: keep every Nth pixel in the published pointcloud (per-axis stride).
-            // Default 1 = full resolution. Production sets STEREO_PC_SUBSAMPLE_FCT=8 → 1/64 density.
+            // Kiwibot: TOTAL reduction between the original depth grid and the published cloud,
+            // on each axis. Default 1 = full resolution. Production sets STEREO_PC_SUBSAMPLE_FCT=8
+            // → 1/64 density. This counts the librealsense decimation filter as well as the stride
+            // applied here, so the published grid does not change when the decimation order does.
             int _pc_subsample_fct;
+
+            // Kiwibot: original depth resolution, before the decimation filter. 0 = unresolved.
+            int _orig_depth_width;
+            int _orig_depth_height;
+            bool _orig_depth_resolved;
             std::mutex _mutex_publisher;
             rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pointcloud_publisher;
             std::string _pointcloud_qos;

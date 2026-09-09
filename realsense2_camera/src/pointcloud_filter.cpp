@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <pointcloud_filter.h>
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 
@@ -26,7 +28,10 @@ PointcloudFilter::PointcloudFilter(std::shared_ptr<rs2::filter> filter, RosNodeB
     _node(node),
     _allow_no_texture_points(ALLOW_NO_TEXTURE_POINTS),
     _ordered_pc(ORDERED_PC),
-    _pc_subsample_fct(1)
+    _pc_subsample_fct(1),
+    _orig_depth_width(0),
+    _orig_depth_height(0),
+    _orig_depth_resolved(false)
     {
         setParameters();
     }
@@ -71,6 +76,7 @@ void PointcloudFilter::setParameters()
 
     // Kiwibot: top-level pc_subsample_fct (matches kronos_bringup launch arg name).
     // 1 = full density. Production sets this to 8 via STEREO_PC_SUBSAMPLE_FCT.
+    // This is the TOTAL reduction consumers see, decimation filter included. See Publish().
     std::string subsample_param("pc_subsample_fct");
     _pc_subsample_fct = _params.getParameters()->setParam<int>(subsample_param, 1);
     if (_pc_subsample_fct < 1) _pc_subsample_fct = 1;
@@ -99,6 +105,42 @@ void reverse_memcpy(unsigned char* dst, const unsigned char* src, size_t n)
     for (i=0; i < n; ++i)
         dst[n-1-i] = src[i];
 
+}
+
+void PointcloudFilter::resolveOriginalDepthSize()
+{
+    if (_orig_depth_resolved)
+        return;
+    _orig_depth_resolved = true;
+
+    // "<width>,<height>,<fps>", registered by profile_manager.cpp for the depth module.
+    const std::string param_name("depth_module.depth_profile");
+    std::string profile;
+    try
+    {
+        if (!_node.has_parameter(param_name) || !_node.get_parameter(param_name, profile))
+        {
+            ROS_WARN_STREAM("pointcloud: " << param_name << " is not readable, so the published cloud "
+                            "keeps the raw pc_subsample_fct stride and follows the decimation order.");
+            return;
+        }
+    }
+    catch(const std::exception& e)
+    {
+        ROS_WARN_STREAM("pointcloud: could not read " << param_name << " (" << e.what() << ").");
+        return;
+    }
+
+    int w = 0, h = 0, fps = 0;
+    if (std::sscanf(profile.c_str(), "%d,%d,%d", &w, &h, &fps) < 2 || w <= 0 || h <= 0)
+    {
+        ROS_WARN_STREAM("pointcloud: could not parse " << param_name << "=\"" << profile << "\".");
+        return;
+    }
+    _orig_depth_width = w;
+    _orig_depth_height = h;
+    ROS_INFO_STREAM("pointcloud: original depth grid " << w << "x" << h
+                    << ", total reduction pc_subsample_fct=" << _pc_subsample_fct);
 }
 
 void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2::frameset& frameset, const std::string& frame_id, bool publish_immediately)
@@ -184,10 +226,50 @@ void PointcloudFilter::Publish(rs2::points pc, const rclcpp::Time& t, const rs2:
 
     rs2_intrinsics depth_intrin = pc.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
 
-    // Kiwibot: per-axis stride into the depth grid. 1 = full resolution.
-    const int stride = (_pc_subsample_fct < 1) ? 1 : _pc_subsample_fct;
-    const int width_out = depth_intrin.width / stride;
-    const int height_out = depth_intrin.height / stride;
+    // Kiwibot: the published grid is the ORIGINAL depth grid reduced by pc_subsample_fct on each
+    // axis, whatever the decimation filter already did upstream.
+    //
+    // Two independent stages can shrink the cloud:
+    //   * the librealsense decimation filter shrinks the DEPTH FRAME before deprojection, so the
+    //     depth_intrin above is ALREADY decimated (640x360 becomes 160x92 at order 4), and
+    //   * this per-axis stride keeps one vertex in N on each axis after deprojection.
+    // Treating pc_subsample_fct as the stride alone made the published size depend on the
+    // decimation order, so every node that subsamples a full resolution mask to index into the
+    // cloud had to know the decimation order too. It also leaked the decimation filter's PADDING:
+    // the filter rounds the decimated height up to a multiple of the patch size (360/4 is 90 real
+    // rows, reported as 92) and those extra rows carry no depth, which is why a decimated cloud
+    // ended up 2 rows taller than the mask.
+    //
+    // The decimation order divides the width exactly, because the filter pads the height only, so
+    // deriving it from the width is safe. Cropping to orig/total then drops the padded rows. A
+    // 640x360 depth stream at pc_subsample_fct=8 publishes 80x45 whether the decimation order is
+    // 0 or 4, which is what develop published before the filter existed.
+    const int total = (_pc_subsample_fct < 1) ? 1 : _pc_subsample_fct;
+    resolveOriginalDepthSize();
+
+    int stride = total;
+    int width_out = depth_intrin.width / stride;
+    int height_out = depth_intrin.height / stride;
+    if (_orig_depth_width > 0 && depth_intrin.width > 0 && _orig_depth_width % depth_intrin.width == 0)
+    {
+        const int decimation = _orig_depth_width / depth_intrin.width;
+        stride = std::max(1, total / decimation);
+        // min() keeps us inside the buffer when the decimation is coarser than the total
+        // reduction asked for: we cannot invent rows, so the cloud stays at the decimated size.
+        width_out = std::min(_orig_depth_width / total, depth_intrin.width / stride);
+        height_out = std::min(_orig_depth_height / total, depth_intrin.height / stride);
+        if (total % decimation != 0)
+        {
+            ROS_WARN_STREAM_ONCE("pointcloud: pc_subsample_fct=" << total << " is not a multiple of the "
+                                 "decimation order " << decimation << ", so the published cloud is "
+                                 << width_out << "x" << height_out << " instead of "
+                                 << (_orig_depth_width / total) << "x" << (_orig_depth_height / total)
+                                 << ". Set STEREO_PC_SUBSAMPLE_FCT to a multiple of "
+                                 "STEREO_DECIMATION_ORDER.");
+        }
+    }
+    if (width_out < 1) width_out = 1;
+    if (height_out < 1) height_out = 1;
     const size_t out_capacity = static_cast<size_t>(width_out) * static_cast<size_t>(height_out);
 
     sensor_msgs::msg::PointCloud2::UniquePtr msg_pointcloud = std::make_unique<sensor_msgs::msg::PointCloud2>();
@@ -340,12 +422,30 @@ bool PointcloudFilter::getCoordsAtPixels(const std::vector<geometry_msgs::msg::P
     stamp = _cached_stamp;
     out_coords.clear();
     out_coords.reserve(pixels.size());
+
+    // Kiwibot: callers give pixels in the ORIGINAL depth image, as on develop. The cached vertex
+    // grid is the decimated one, so map the pixel through the decimation order before indexing.
+    // Without this every pixel past the decimated width, which is most of the image, read as
+    // out of range and came back as (-1,-1,-1).
+    int decimation = 1;
+    int max_x = _cached_intrinsics.width;
+    int max_y = _cached_intrinsics.height;
+    if (_orig_depth_width > 0 && _cached_intrinsics.width > 0 &&
+        _orig_depth_width % _cached_intrinsics.width == 0)
+    {
+        decimation = _orig_depth_width / _cached_intrinsics.width;
+        max_x = _orig_depth_width;
+        max_y = _orig_depth_height;
+    }
+
     for (const auto& p : pixels)
     {
         geometry_msgs::msg::Point coord;
-        const int x = static_cast<int>(std::trunc(p.x));
-        const int y = static_cast<int>(std::trunc(p.y));
-        if (x < 0 || x >= _cached_intrinsics.width || y < 0 || y >= _cached_intrinsics.height)
+        const int x = static_cast<int>(std::trunc(p.x)) / decimation;
+        const int y = static_cast<int>(std::trunc(p.y)) / decimation;
+        if (p.x < 0.0 || p.x >= static_cast<double>(max_x) ||
+            p.y < 0.0 || p.y >= static_cast<double>(max_y) ||
+            x >= _cached_intrinsics.width || y >= _cached_intrinsics.height)
         {
             coord.x = -1.0; coord.y = -1.0; coord.z = -1.0;
         }
