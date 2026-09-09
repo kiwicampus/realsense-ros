@@ -104,7 +104,23 @@ def declare_configurable_parameters(parameters):
     return [DeclareLaunchArgument(param['name'], default_value=param['default'], description=param['description']) for param in parameters]
 
 def set_configurable_parameters(parameters):
-    return dict([(param['name'], LaunchConfiguration(param['name'])) for param in parameters])
+    params = dict([(param['name'], LaunchConfiguration(param['name'])) for param in parameters])
+    # realsense-ros derives a filter's parameter prefix from the processing block's NAME, and the
+    # pointcloud block is named after the implementation it was compiled with. On arm64 we build
+    # with BUILD_WITH_NEON=true, so the block is "Pointcloud (NEON)" and the node declares
+    # pointcloud__neon_.* - every plain pointcloud.* override is then silently dropped. That left
+    # pointcloud__neon_.enable at its built-in default of false, so the camera published NO cloud
+    # at all on JP5, and pointcloud.ordered_pc / stream_filter never took either.
+    # Verified on 4U081 (2026-09-09): 'ros2 param list /camera' has no pointcloud.* whatsoever,
+    # and setting pointcloud__neon_.enable=true made the cloud appear immediately.
+    # x86 (simulator) keeps the plain name, so send BOTH spellings: the node ignores an override
+    # for a parameter it does not declare.
+    for name in list(params):
+        if name.startswith('pointcloud.'):
+            params['pointcloud__neon_.' + name[len('pointcloud.'):]] = params[name]
+        elif name == 'allow_no_texture_points':
+            params['pointcloud__neon_.allow_no_texture_points'] = params[name]
+    return params
 
 def generate_launch_description():
     log_level = 'info'
