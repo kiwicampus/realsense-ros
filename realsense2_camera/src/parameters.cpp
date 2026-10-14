@@ -100,6 +100,11 @@ void BaseRealSenseNode::getParameters()
     param_name = std::string("publish_shm");
     _publish_shm = _parameters->setParam<bool>(param_name, false);
     _parameters_names.push_back(param_name);
+
+    // Kiwi added: align color to depth (color at the depth resolution, in the depth frame). Read once at start
+    param_name = std::string("align_color_to_depth.enable");
+    _align_color_to_depth = _parameters->setParam<bool>(param_name, false);
+    _parameters_names.push_back(param_name);
 }
 
 void BaseRealSenseNode::setDynamicParams()

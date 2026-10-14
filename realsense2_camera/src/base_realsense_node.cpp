@@ -261,6 +261,14 @@ void BaseRealSenseNode::setupFilters()
     _align_depth_filter = std::make_shared<AlignDepthFilter>(std::make_shared<rs2::align>(RS2_STREAM_COLOR), update_align_depth_func, _parameters, _logger);
     _filters.push_back(_align_depth_filter);
 
+    if (_align_color_to_depth)
+    {
+        _align_to_depth = std::make_shared<rs2::align>(RS2_STREAM_DEPTH);
+        ROS_INFO_STREAM("Color is aligned to depth on aligned_color_to_depth/image_raw");
+        if (_align_depth_filter->is_enabled())
+            ROS_WARN_STREAM("align_depth.enable and align_color_to_depth.enable are both on: both alignments run");
+    }
+
     _colorizer_filter = std::make_shared<NamedFilter>(std::make_shared<rs2::colorizer>(), _parameters, _logger); 
     _filters.push_back(_colorizer_filter);
 
@@ -650,8 +658,14 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
         }
 
         ROS_DEBUG("num_filters: %d", static_cast<int>(_filters.size()));
+        rs2::frame color_aligned_to_depth;
         for (auto filter_it : _filters)
         {
+            // Kiwi added: align color to the post-processed depth, before align_depth can replace the depth
+            if (_align_to_depth && filter_it == _align_depth_filter && frameset.get_depth_frame() && frameset.get_color_frame())
+            {
+                color_aligned_to_depth = _align_to_depth->process(frameset).get_color_frame();
+            }
             frameset = filter_it->Process(frameset);
         }
 
@@ -693,6 +707,15 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                         _image,
                         _info_publisher,
                         _image_publishers);
+        }
+        if (color_aligned_to_depth)
+        {
+            // Keyed by DEPTH: publishFrame takes the depth camera_info and optical frame id
+            publishFrame(color_aligned_to_depth, t, DEPTH,
+                        _color_aligned_image,
+                        _color_aligned_info_publisher,
+                        _color_aligned_image_publishers,
+                        false);
         }
         if (original_depth_frame && _align_depth_filter->is_enabled())
         {

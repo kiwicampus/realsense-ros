@@ -291,6 +291,13 @@ namespace realsense2_camera
 
         bool _use_intra_process;
         bool _publish_shm;
+        // Kiwi added: color aligned to the depth image (align_color_to_depth.enable), published on
+        // aligned_color_to_depth/* with the depth intrinsics and frame. Maps are keyed by DEPTH
+        bool _align_color_to_depth = false;
+        std::shared_ptr<rs2::align> _align_to_depth;
+        std::map<stream_index_pair, cv::Mat> _color_aligned_image;
+        std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr> _color_aligned_info_publisher;
+        std::map<stream_index_pair, std::shared_ptr<image_publisher>> _color_aligned_image_publishers;
         std::map<stream_index_pair, std::shared_ptr<image_publisher>> _image_publishers;
         
         std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> _imu_publishers;
