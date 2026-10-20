@@ -648,7 +648,7 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
 
     rclcpp::Time t(frameSystemTimeSec(frame));
     // Kiwi added: full color to the H.264 encoder, then everything below sees the downscaled color
-    if (_color_downscaler)
+    if (_color_nvenc)
     {
         publishColorHires(frame, t);
     }

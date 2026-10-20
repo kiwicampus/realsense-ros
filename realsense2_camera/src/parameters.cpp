@@ -106,7 +106,7 @@ void BaseRealSenseNode::getParameters()
     // The sensor's full color frame then goes only to the H.264 encoder (color_nvenc). Read once at start
     param_name = std::string("color_downscale");
     _color_downscale = std::max(1, _parameters->setParam<int>(param_name, 1));
-    // Kiwi added: full-res color -> H.264 on VIC + NVENC in the driver (needs color_downscale > 1 and the
+    // Kiwi added: full-res color -> H.264 on VIC + NVENC in the driver (needs the
     // nvjpg_decoder library); default from the launch env STEREO_COLOR_NVENC. Read once at start
     const char* nvenc_env = std::getenv("STEREO_COLOR_NVENC");
     param_name = std::string("color_nvenc");

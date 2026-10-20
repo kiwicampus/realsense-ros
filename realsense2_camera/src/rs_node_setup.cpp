@@ -224,8 +224,8 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
             _info_publisher[sip] = _node.create_publisher<sensor_msgs::msg::CameraInfo>(camera_info.str(), 
                                     rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(info_qos), info_qos));
 
-            // Kiwi added: with color_downscale the sensor's full color frame goes only to the H.264 encoder
-            if (_color_downscale > 1 && sip == COLOR && _color_nvenc_enabled)
+            // Kiwi added: the sensor's full color frame to the H.264 encoder (with color_downscale, only there)
+            if (sip == COLOR && _color_nvenc_enabled)
             {
                 _color_nvenc = std::make_shared<NvencColorEncoder>(_node, stream_name + "/foxglove",
                                                                    OPTICAL_FRAME_ID(COLOR), _color_nvenc_bitrate,
