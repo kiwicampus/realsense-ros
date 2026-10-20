@@ -10,6 +10,7 @@
 #include <librealsense2/rs.hpp>
 #include <mutex>
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
 #include <string>
 #include <thread>
 #include <vector>
@@ -18,7 +19,8 @@ namespace realsense2_camera {
 class NvencColorEncoder
 {
    public:
-    // topic: CompressedVideo topic (relative to the node); the encoder starts on the first frame
+    // topic: CompressedVideo topic (relative to the node), with the CameraInfo of its full-res frames on
+    // <topic>/camera_info; the encoder starts on the first frame
     NvencColorEncoder(rclcpp::Node& node, const std::string& topic, const std::string& frame_id, int bitrate, int gop,
                       rclcpp::Logger logger);
     ~NvencColorEncoder();
@@ -39,6 +41,8 @@ class NvencColorEncoder
     std::string _frame_id;
     int _bitrate, _gop;
     rclcpp::Publisher<foxglove_msgs::msg::CompressedVideo>::SharedPtr _pub;
+    rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr _info_pub;
+    sensor_msgs::msg::CameraInfo _info;
     void* _enc = nullptr;
     std::vector<uint8_t> _out;
     std::atomic<bool> _failed{false};

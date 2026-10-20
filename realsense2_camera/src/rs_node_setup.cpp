@@ -529,7 +529,11 @@ bool BaseRealSenseNode::get_coords_cb(realsense2_camera_srvs::srv::CoordinateReq
         geometry_msgs::msg::PointStamped point_requested_coords;
         point_requested_coords.header.stamp = _node.now();
         point_requested_coords.header.frame_id = "camera_color_optical_frame";
-        if(_node.now() - _pc_filter->_msg_pointcloud.header.stamp > rclcpp::Duration(3, 0) || !transform_available){
+        // Kiwi added: a pixel outside the depth image would read past the vertex buffer
+        const bool inside = point_requested.x >= 0 && point_requested.y >= 0 &&
+                            point_requested.x < _pc_filter->_depth_intrin.width &&
+                            point_requested.y < _pc_filter->_depth_intrin.height;
+        if(_node.now() - _pc_filter->_msg_pointcloud.header.stamp > rclcpp::Duration(3, 0) || !transform_available || !inside){
             point_requested_coords.point.x = -1.0f;
             point_requested_coords.point.y = -1.0f; 
             point_requested_coords.point.z = -1.0f;

@@ -20,6 +20,7 @@ NvencColorEncoder::NvencColorEncoder(rclcpp::Node& node, const std::string& topi
 {
     // Same QoS as ffmpeg_image_transport: reliable, keep last 2 GOPs
     _pub = node.create_publisher<foxglove_msgs::msg::CompressedVideo>(topic, rclcpp::QoS(std::max(10, 2 * gop)));
+    _info_pub = node.create_publisher<sensor_msgs::msg::CameraInfo>(topic + "/camera_info", 10);
     _thread = std::thread(&NvencColorEncoder::run, this);
 }
 
@@ -52,6 +53,17 @@ bool NvencColorEncoder::start(const rs2::video_frame& frame)
         RCLCPP_ERROR(_logger, "color_nvenc: encoder did not start (%s): no color H.264", err);
         return false;
     }
+    // CameraInfo of the full-res frames, filled as the driver fills color/camera_info
+    const rs2_intrinsics in = frame.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
+    _info.header.frame_id = _frame_id;
+    _info.width = in.width;
+    _info.height = in.height;
+    _info.k = {in.fx, 0, in.ppx, 0, in.fy, in.ppy, 0, 0, 1};
+    _info.r = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    _info.p = {in.fx, 0, in.ppx, 0, 0, in.fy, in.ppy, 0, 0, 0, 1, 0};
+    const int coeffs = in.model == RS2_DISTORTION_KANNALA_BRANDT4 ? 4 : 5;
+    _info.distortion_model = coeffs == 4 ? "equidistant" : "plumb_bob";
+    _info.d.assign(in.coeffs, in.coeffs + coeffs);
     RCLCPP_INFO(_logger, "color_nvenc: %dx%d %s @%d fps -> NVENC H.264 %d bit/s GOP %d on %s", frame.get_width(),
                 frame.get_height(), rs2_format_to_string(frame.get_profile().format()), fps, _bitrate, _gop,
                 _pub->get_topic_name());
@@ -66,7 +78,9 @@ void NvencColorEncoder::publish(size_t len, int64_t stamp_ns)
     msg.frame_id = _frame_id;
     msg.format = "h264";
     msg.data.assign(_out.begin(), _out.begin() + len);
+    _info.header.stamp = msg.timestamp;
     _pub->publish(std::move(msg));
+    _info_pub->publish(_info);
 }
 
 void NvencColorEncoder::run()
