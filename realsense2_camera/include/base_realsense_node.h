@@ -38,6 +38,7 @@
 
 #include <ros_sensor.h>
 #include <named_filter.h>
+#include "nvenc_color.h"
 
 #include <queue>
 #include <mutex>
@@ -251,7 +252,9 @@ namespace realsense2_camera
         void pose_callback(rs2::frame frame);
         void multiple_message_callback(rs2::frame frame, imu_sync_method sync_method);
         void frame_callback(rs2::frame frame);
-        
+        rs2::frame downscaleColor(const rs2::video_frame& color, const rs2::frame_source& src);
+        void publishColorHires(const rs2::frame& frame, const rclcpp::Time& t);
+
         void startDiagnosticsUpdater();
         void monitoringProfileChanges();
         void publish_temperature();
@@ -291,13 +294,25 @@ namespace realsense2_camera
 
         bool _use_intra_process;
         bool _publish_shm;
-        // Kiwi added: color aligned to the depth image (align_color_to_depth.enable), published on
-        // aligned_color_to_depth/* with the depth intrinsics and frame. Maps are keyed by DEPTH
-        bool _align_color_to_depth = false;
-        std::shared_ptr<rs2::align> _align_to_depth;
-        std::map<stream_index_pair, cv::Mat> _color_aligned_image;
-        std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr> _color_aligned_info_publisher;
-        std::map<stream_index_pair, std::shared_ptr<image_publisher>> _color_aligned_image_publishers;
+        // Kiwi added: color_downscale > 1 runs the color (publish, align_depth, pointcloud texture) at the sensor
+        // resolution / N, as if the sensor ran that profile; the full frame goes only to the H.264 encoder
+        // (color_nvenc), never to a ROS Image topic
+        int _color_downscale = 1;
+        // Kiwi added: process (filters, align, pointcloud, publish) only every (depth fps / depth_process_fps)th
+        // frameset with depth. Depth and color then run at the same rate (firmware-synchronised pairs) while the
+        // H.264 encoder gets every color frame, e.g. both at 30 fps, depth_process_fps 15: H.264 color 30 Hz,
+        // everything else 15 Hz
+        int _depth_process_fps = 0;
+        uint64_t _depth_framesets = 0;
+        std::shared_ptr<rs2::filter> _color_downscaler;
+        rs2::stream_profile _color_lowres_profile;
+        int _color_lowres_source_uid = -1;
+        // Kiwi added: color_nvenc encodes the full-res color to H.264 on VIC + NVENC in this process and
+        // publishes color/foxglove (CompressedVideo)
+        bool _color_nvenc_enabled = false;
+        int _color_nvenc_bitrate = 4000000;
+        int _color_nvenc_gop = 10;
+        std::shared_ptr<NvencColorEncoder> _color_nvenc;
         std::map<stream_index_pair, std::shared_ptr<image_publisher>> _image_publishers;
         
         std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> _imu_publishers;

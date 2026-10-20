@@ -109,6 +109,8 @@ find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(diagnostic_updater REQUIRED)
 find_package(shm_ros REQUIRED)
+find_package(foxglove_msgs REQUIRED)
+find_package(nvjpg_decoder REQUIRED)
 
 find_package(realsense2 2.57.3)
 if(NOT realsense2_FOUND)
@@ -123,6 +125,7 @@ set(node_plugins "")
 set(SOURCES
     src/realsense_node_factory.cpp
     src/base_realsense_node.cpp
+    src/nvenc_color.cpp
     src/t265_realsense_node.cpp
     src/parameters.cpp
     src/rs_node_setup.cpp
@@ -174,6 +177,7 @@ set(INCLUDES
     include/constants.h
     include/realsense_node_factory.h
     include/base_realsense_node.h
+    include/nvenc_color.h
     include/t265_realsense_node.h
     include/ros_sensor.h
     include/ros_utils.h
@@ -223,6 +227,8 @@ set(dependencies
   tf2_geometry_msgs
   diagnostic_updater
   shm_ros
+  foxglove_msgs
+  nvjpg_decoder
 )
 
 ament_target_dependencies(${PROJECT_NAME}

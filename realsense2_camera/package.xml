@@ -31,6 +31,9 @@
   <depend>tf2_ros</depend>
   <depend>diagnostic_updater</depend>
   <depend>shm_ros</depend>
+  <depend>foxglove_msgs</depend>
+  <!-- color_nvenc: H.264 of the color on NVENC -->
+  <depend>nvjpg_decoder</depend>
 
   <exec_depend>launch_ros</exec_depend>
   <build_depend>ros_environment</build_depend>

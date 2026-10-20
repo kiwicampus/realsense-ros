@@ -7,6 +7,7 @@
 #include <mutex>
 #include <array>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
+#include <opencv2/imgproc.hpp>
 #include <rclcpp/clock.hpp>
 #include <fstream>
 #include <image_publisher.h>
@@ -261,12 +262,24 @@ void BaseRealSenseNode::setupFilters()
     _align_depth_filter = std::make_shared<AlignDepthFilter>(std::make_shared<rs2::align>(RS2_STREAM_COLOR), update_align_depth_func, _parameters, _logger);
     _filters.push_back(_align_depth_filter);
 
-    if (_align_color_to_depth)
+    if (_color_downscale > 1)
     {
-        _align_to_depth = std::make_shared<rs2::align>(RS2_STREAM_DEPTH);
-        ROS_INFO_STREAM("Color is aligned to depth on aligned_color_to_depth/image_raw");
-        if (_align_depth_filter->is_enabled())
-            ROS_WARN_STREAM("align_depth.enable and align_color_to_depth.enable are both on: both alignments run");
+        _color_downscaler = std::make_shared<rs2::filter>([this](rs2::frame f, rs2::frame_source& src) {
+            auto shrink = [&](const rs2::frame& x) -> rs2::frame {
+                if (x.get_profile().stream_type() == RS2_STREAM_COLOR && x.is<rs2::video_frame>())
+                    return downscaleColor(x.as<rs2::video_frame>(), src);
+                return x;
+            };
+            if (!f.is<rs2::frameset>())
+            {
+                src.frame_ready(shrink(f));
+                return;
+            }
+            std::vector<rs2::frame> frames;
+            for (auto&& x : f.as<rs2::frameset>()) frames.push_back(shrink(x));
+            src.frame_ready(src.allocate_composite_frame(frames));
+        });
+        ROS_INFO_STREAM("Color is downscaled by " << _color_downscale << " for every output but color/foxglove");
     }
 
     _colorizer_filter = std::make_shared<NamedFilter>(std::make_shared<rs2::colorizer>(), _parameters, _logger); 
@@ -634,6 +647,24 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
     (void)frame_time;
 
     rclcpp::Time t(frameSystemTimeSec(frame));
+    // Kiwi added: full color to the H.264 encoder, then everything below sees the downscaled color
+    if (_color_downscaler)
+    {
+        publishColorHires(frame, t);
+    }
+    // Do the depth work on every (depth fps / depth_process_fps)th frameset only (the H.264 color above is already out)
+    if (_depth_process_fps > 0 && frame.is<rs2::frameset>())
+    {
+        auto depth = frame.as<rs2::frameset>().first_or_default(RS2_STREAM_DEPTH);
+        if (depth && _depth_framesets++ % std::max(1, depth.get_profile().fps() / _depth_process_fps) != 0)
+        {
+            return;
+        }
+    }
+    if (_color_downscaler)
+    {
+        frame = _color_downscaler->process(frame);
+    }
     if (frame.is<rs2::frameset>())
     {
         ROS_DEBUG("Frameset arrived.");
@@ -657,15 +688,15 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
             clip_depth(original_depth_frame, _clipping_distance);
         }
 
+        // Kiwi added: under load the syncer sends some framesets with depth but no color. align then passes the
+        // depth through unaligned and the pointcloud is built on it (decimated size), which consumers reject.
+        // Publish neither the pointcloud nor the aligned depth for such a frameset
+        const bool aligned = !_align_depth_filter->is_enabled() || static_cast<bool>(frameset.first_or_default(RS2_STREAM_COLOR));
+        if (!aligned) ROS_DEBUG("Frameset without color: skipping pointcloud and aligned depth");
+
         ROS_DEBUG("num_filters: %d", static_cast<int>(_filters.size()));
-        rs2::frame color_aligned_to_depth;
         for (auto filter_it : _filters)
         {
-            // Kiwi added: align color to the post-processed depth, before align_depth can replace the depth
-            if (_align_to_depth && filter_it == _align_depth_filter && frameset.get_depth_frame() && frameset.get_color_frame())
-            {
-                color_aligned_to_depth = _align_to_depth->process(frameset).get_color_frame();
-            }
             frameset = filter_it->Process(frameset);
         }
 
@@ -686,7 +717,7 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
 
             if (f.is<rs2::points>())
             {
-                publishPointCloud(f.as<rs2::points>(), t, frameset);
+                if (aligned) publishPointCloud(f.as<rs2::points>(), t, frameset);
                 continue;
             }
             if (stream_type == RS2_STREAM_DEPTH)
@@ -695,6 +726,7 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                 sent_depth_frame = true;
                 if (_align_depth_filter->is_enabled())
                 {
+                    if (!aligned) continue;
                     publishFrame(f, t, COLOR,
                             _depth_aligned_image,
                             _depth_aligned_info_publisher,
@@ -707,15 +739,6 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                         _image,
                         _info_publisher,
                         _image_publishers);
-        }
-        if (color_aligned_to_depth)
-        {
-            // Keyed by DEPTH: publishFrame takes the depth camera_info and optical frame id
-            publishFrame(color_aligned_to_depth, t, DEPTH,
-                        _color_aligned_image,
-                        _color_aligned_info_publisher,
-                        _color_aligned_image_publishers,
-                        false);
         }
         if (original_depth_frame && _align_depth_filter->is_enabled())
         {
@@ -754,6 +777,59 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                     _image_publishers);
     }
 } // frame_callback  (_resume_guard destructor calls Resume() here)
+
+rs2::frame BaseRealSenseNode::downscaleColor(const rs2::video_frame& color, const rs2::frame_source& src)
+{
+    const auto format = color.get_profile().format();
+    if (format != RS2_FORMAT_RGB8 && format != RS2_FORMAT_BGR8 && format != RS2_FORMAT_RGBA8 &&
+        format != RS2_FORMAT_BGRA8 && format != RS2_FORMAT_Y8)
+    {
+        RCLCPP_ERROR_ONCE(_logger,
+                          "color_downscale needs an 8-bit per channel color format, got %s: color is not downscaled",
+                          rs2_format_to_string(format));
+        return color;
+    }
+    auto profile = color.get_profile().as<rs2::video_stream_profile>();
+    if (profile.unique_id() != _color_lowres_source_uid)
+    {
+        // Plain scaling of fx, fy, ppx, ppy: what the sensor itself reports for its lower resolutions
+        // (D455 640x360 color = 1280x720 intrinsics / 2)
+        rs2_intrinsics intr = profile.get_intrinsics();
+        const float sx = static_cast<float>(intr.width / _color_downscale) / intr.width;
+        const float sy = static_cast<float>(intr.height / _color_downscale) / intr.height;
+        intr.width /= _color_downscale;
+        intr.height /= _color_downscale;
+        intr.fx *= sx;
+        intr.ppx *= sx;
+        intr.fy *= sy;
+        intr.ppy *= sy;
+        _color_lowres_profile =
+            profile.clone(RS2_STREAM_COLOR, profile.stream_index(), format, intr.width, intr.height, intr);
+        // Same optical frame as the sensor profile: align_depth and the pointcloud reach the depth through it
+        _color_lowres_profile.register_extrinsics_to(profile, {{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
+        _color_lowres_source_uid = profile.unique_id();
+    }
+    const auto lowres = _color_lowres_profile.as<rs2::video_stream_profile>();
+    const int bpp = color.get_bytes_per_pixel();
+    const int w = lowres.width();
+    const int h = lowres.height();
+    rs2::frame out =
+        src.allocate_video_frame(_color_lowres_profile, color, bpp, w, h, w * bpp, RS2_EXTENSION_VIDEO_FRAME);
+    const cv::Mat in(color.get_height(), color.get_width(), CV_8UC(bpp), const_cast<void*>(color.get_data()),
+                     color.get_stride_in_bytes());
+    cv::Mat dst(h, w, CV_8UC(bpp), const_cast<void*>(out.get_data()));
+    cv::resize(in, dst, dst.size(), 0, 0, cv::INTER_AREA);
+    return out;
+}
+
+void BaseRealSenseNode::publishColorHires(const rs2::frame& frame, const rclcpp::Time& t)
+{
+    rs2::frame color = frame.is<rs2::frameset>() ? frame.as<rs2::frameset>().get_color_frame() : frame;
+    if (!color || color.get_profile().stream_type() != RS2_STREAM_COLOR || !color.is<rs2::video_frame>()) return;
+    // Kiwi added: H.264 in this process (the frame is handed over, not copied)
+    auto nvenc = _color_nvenc;
+    if (nvenc && !nvenc->failed()) nvenc->push(color.as<rs2::video_frame>(), t.nanoseconds());
+}
 
 void BaseRealSenseNode::multiple_message_callback(rs2::frame frame, imu_sync_method sync_method)
 {

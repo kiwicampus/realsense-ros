@@ -3,6 +3,7 @@
 
 #include "../include/base_realsense_node.h"
 #include <ros_utils.h>
+#include <cstdlib>
 #include <iomanip>
 
 using namespace realsense2_camera;
@@ -101,9 +102,24 @@ void BaseRealSenseNode::getParameters()
     _publish_shm = _parameters->setParam<bool>(param_name, false);
     _parameters_names.push_back(param_name);
 
-    // Kiwi added: align color to depth (color at the depth resolution, in the depth frame). Read once at start
-    param_name = std::string("align_color_to_depth.enable");
-    _align_color_to_depth = _parameters->setParam<bool>(param_name, false);
+    // Kiwi added: >1 shrinks the color by this factor before align/pointcloud/publish (see downscaleColor).
+    // The sensor's full color frame then goes only to the H.264 encoder (color_nvenc). Read once at start
+    param_name = std::string("color_downscale");
+    _color_downscale = std::max(1, _parameters->setParam<int>(param_name, 1));
+    // Kiwi added: full-res color -> H.264 on VIC + NVENC in the driver (needs color_downscale > 1 and the
+    // nvjpg_decoder library); default from the launch env STEREO_COLOR_NVENC. Read once at start
+    const char* nvenc_env = std::getenv("STEREO_COLOR_NVENC");
+    param_name = std::string("color_nvenc");
+    _color_nvenc_enabled = _parameters->setParam<bool>(param_name, nvenc_env && std::string(nvenc_env) == "1");
+    _parameters_names.push_back(param_name);
+    param_name = std::string("color_nvenc_bitrate");
+    _color_nvenc_bitrate = _parameters->setParam<int>(param_name, 4000000);
+    _parameters_names.push_back(param_name);
+    param_name = std::string("color_nvenc_gop");
+    _color_nvenc_gop = std::max(1, _parameters->setParam<int>(param_name, 10));
+    _parameters_names.push_back(param_name);
+    param_name = std::string("depth_process_fps");
+    _depth_process_fps = _parameters->setParam<int>(param_name, 0);
     _parameters_names.push_back(param_name);
 }
 

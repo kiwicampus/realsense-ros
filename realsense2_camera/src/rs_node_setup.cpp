@@ -168,11 +168,7 @@ void BaseRealSenseNode::stopPublishers(const std::vector<stream_profile>& profil
             _info_publisher.erase(sip);
             _depth_aligned_image_publishers.erase(sip);
             _depth_aligned_info_publisher.erase(sip);
-            if (sip == COLOR)
-            {
-                _color_aligned_image_publishers.erase(DEPTH);
-                _color_aligned_info_publisher.erase(DEPTH);
-            }
+            if (sip == COLOR) _color_nvenc.reset();
         }
         else if (profile.is<rs2::motion_stream_profile>())
         {
@@ -228,6 +224,14 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
             _info_publisher[sip] = _node.create_publisher<sensor_msgs::msg::CameraInfo>(camera_info.str(), 
                                     rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(info_qos), info_qos));
 
+            // Kiwi added: with color_downscale the sensor's full color frame goes only to the H.264 encoder
+            if (_color_downscale > 1 && sip == COLOR && _color_nvenc_enabled)
+            {
+                _color_nvenc = std::make_shared<NvencColorEncoder>(_node, stream_name + "/foxglove",
+                                                                   OPTICAL_FRAME_ID(COLOR), _color_nvenc_bitrate,
+                                                                   _color_nvenc_gop, _logger);
+            }
+
             if (_align_depth_filter->is_enabled() && (sip != DEPTH) && sip.second < 2)
             {
                 std::stringstream aligned_image_raw, aligned_camera_info;
@@ -254,23 +258,6 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
                         _node, aligned_image_raw.str() + "_shm", qos, _depth_aligned_image_publishers[sip]);
                 }
                 _depth_aligned_info_publisher[sip] = _node.create_publisher<sensor_msgs::msg::CameraInfo>(aligned_camera_info.str(),
-                                                      rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(info_qos), info_qos));
-            }
-
-            // Kiwi added: color aligned to depth, keyed by DEPTH (its camera_info and frame id)
-            if (_align_color_to_depth && sip == COLOR)
-            {
-                const std::string aligned_image_raw("aligned_color_to_depth/image_raw");
-                if (_use_intra_process)
-                    _color_aligned_image_publishers[DEPTH] = std::make_shared<image_rcl_publisher>(_node, aligned_image_raw, qos);
-                else
-                    _color_aligned_image_publishers[DEPTH] = std::make_shared<image_transport_publisher>(_node, aligned_image_raw, qos);
-                if (_publish_shm)
-                {
-                    _color_aligned_image_publishers[DEPTH] = std::make_shared<image_shm_publisher>(
-                        _node, aligned_image_raw + "_shm", qos, _color_aligned_image_publishers[DEPTH]);
-                }
-                _color_aligned_info_publisher[DEPTH] = _node.create_publisher<sensor_msgs::msg::CameraInfo>("aligned_color_to_depth/camera_info",
                                                       rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(info_qos), info_qos));
             }
         }
