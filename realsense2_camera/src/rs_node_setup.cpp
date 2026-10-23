@@ -229,7 +229,8 @@ void BaseRealSenseNode::startPublishers(const std::vector<stream_profile>& profi
             {
                 _color_nvenc = std::make_shared<NvencColorEncoder>(_node, stream_name + "/foxglove",
                                                                    OPTICAL_FRAME_ID(COLOR), _color_nvenc_bitrate,
-                                                                   _color_nvenc_gop, _color_anonymizer, _logger);
+                                                                   _color_nvenc_gop, _color_anonymizer,
+                                                                   _color_nvenc_nice, _logger);
             }
 
             if (_align_depth_filter->is_enabled() && (sip != DEPTH) && sip.second < 2)

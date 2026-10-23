@@ -31,9 +31,10 @@ class NvencColorEncoder
    public:
     // topic: CompressedVideo topic (relative to the node), with the CameraInfo of its full-res frames on
     // <topic>/camera_info; the encoder starts on the first frame. With anon.enabled, every frame is anonymized
-    // before encoding, or blanked when that fails (never encoded as it is)
+    // before encoding, or blanked when that fails (never encoded as it is). thread_nice: CPU priority of the
+    // encoder thread (named "nvenc_color"; < 0 = higher), 0 leaves it as the node's
     NvencColorEncoder(rclcpp::Node& node, const std::string& topic, const std::string& frame_id, int bitrate, int gop,
-                      const NvencAnonymizer& anon, rclcpp::Logger logger);
+                      const NvencAnonymizer& anon, int thread_nice, rclcpp::Logger logger);
     ~NvencColorEncoder();
 
     // True once the encoder could not start: the caller uses its fallback path
@@ -53,6 +54,7 @@ class NvencColorEncoder
     std::string _frame_id;
     int _bitrate, _gop;
     NvencAnonymizer _anon;
+    int _thread_nice;
     std::chrono::steady_clock::time_point _anon_log_time;
     rclcpp::Clock _steady_clock{RCL_STEADY_TIME};  // log throttling
     rclcpp::Publisher<foxglove_msgs::msg::CompressedVideo>::SharedPtr _pub;

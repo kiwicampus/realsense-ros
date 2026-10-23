@@ -2,6 +2,13 @@
 #include "nvenc_color.h"
 
 #include <nvjpg_decoder/nvjpg_decoder.h>
+#include <pthread.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <cstring>
 
 namespace realsense2_camera {
 namespace {
@@ -17,8 +24,10 @@ constexpr auto kAnonLogPeriod = std::chrono::seconds(30);
 }  // namespace
 
 NvencColorEncoder::NvencColorEncoder(rclcpp::Node& node, const std::string& topic, const std::string& frame_id,
-                                     int bitrate, int gop, const NvencAnonymizer& anon, rclcpp::Logger logger)
-    : _logger(logger), _frame_id(frame_id), _bitrate(bitrate), _gop(gop), _anon(anon), _out(kMaxAccessUnit)
+                                     int bitrate, int gop, const NvencAnonymizer& anon, int thread_nice,
+                                     rclcpp::Logger logger)
+    : _logger(logger), _frame_id(frame_id), _bitrate(bitrate), _gop(gop), _anon(anon), _thread_nice(thread_nice),
+      _out(kMaxAccessUnit)
 {
     // Same QoS as ffmpeg_image_transport: reliable, keep last 2 GOPs
     _pub = node.create_publisher<foxglove_msgs::msg::CompressedVideo>(topic, rclcpp::QoS(std::max(10, 2 * gop)));
@@ -112,6 +121,11 @@ void NvencColorEncoder::log_anon_stats()
 
 void NvencColorEncoder::run()
 {
+    // The encoder thread also launches the anonymizer's GPU work: when it waits for a CPU core, the GPU idles
+    // between kernels and the frame takes longer. A higher priority keeps it fed under a loaded CPU
+    pthread_setname_np(pthread_self(), "nvenc_color");
+    if (_thread_nice != 0 && setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), _thread_nice) != 0)
+        RCLCPP_WARN(_logger, "color_nvenc: thread priority (nice %d) not set: %s", _thread_nice, strerror(errno));
     while (!_stop)
     {
         rs2::frame f;

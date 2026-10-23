@@ -118,6 +118,10 @@ void BaseRealSenseNode::getParameters()
     param_name = std::string("color_nvenc_gop");
     _color_nvenc_gop = std::max(1, _parameters->setParam<int>(param_name, 10));
     _parameters_names.push_back(param_name);
+    // CPU priority (nice) of the encoder thread, which also runs the anonymizer; 0: unchanged
+    param_name = std::string("color_nvenc_nice");
+    _color_nvenc_nice = _parameters->setParam<int>(param_name, -10);
+    _parameters_names.push_back(param_name);
     // Kiwi added: anonymize (face / licence plate pixelation) the color H.264 before encoding; fail closed: frames
     // that cannot be anonymized are encoded blanked. Paths are local (the launch downloads gs:// ones). Read once
     param_name = std::string("color_anonymize");
