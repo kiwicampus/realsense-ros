@@ -3,6 +3,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -16,13 +17,23 @@
 #include <vector>
 
 namespace realsense2_camera {
+// Face / licence plate pixelation of the encoded frames (nvjpg_decoder anonymizer: libanon.so + TensorRT engine)
+struct NvencAnonymizer
+{
+    bool enabled = false;
+    std::string lib_path, engine_path;
+    float threshold = 0.2f;
+    int detect_every = 1;
+};
+
 class NvencColorEncoder
 {
    public:
     // topic: CompressedVideo topic (relative to the node), with the CameraInfo of its full-res frames on
-    // <topic>/camera_info; the encoder starts on the first frame
+    // <topic>/camera_info; the encoder starts on the first frame. With anon.enabled, every frame is anonymized
+    // before encoding, or blanked when that fails (never encoded as it is)
     NvencColorEncoder(rclcpp::Node& node, const std::string& topic, const std::string& frame_id, int bitrate, int gop,
-                      rclcpp::Logger logger);
+                      const NvencAnonymizer& anon, rclcpp::Logger logger);
     ~NvencColorEncoder();
 
     // True once the encoder could not start: the caller uses its fallback path
@@ -36,10 +47,14 @@ class NvencColorEncoder
     bool start(const rs2::video_frame& frame);
     void run();
     void publish(size_t len, int64_t stamp_ns);
+    void log_anon_stats();
 
     rclcpp::Logger _logger;
     std::string _frame_id;
     int _bitrate, _gop;
+    NvencAnonymizer _anon;
+    std::chrono::steady_clock::time_point _anon_log_time;
+    rclcpp::Clock _steady_clock{RCL_STEADY_TIME};  // log throttling
     rclcpp::Publisher<foxglove_msgs::msg::CompressedVideo>::SharedPtr _pub;
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr _info_pub;
     sensor_msgs::msg::CameraInfo _info;

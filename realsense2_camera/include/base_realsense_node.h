@@ -312,6 +312,7 @@ namespace realsense2_camera
         bool _color_nvenc_enabled = false;
         int _color_nvenc_bitrate = 4000000;
         int _color_nvenc_gop = 10;
+        NvencAnonymizer _color_anonymizer;  // color_anonymize*: pixelation before NVENC
         std::shared_ptr<NvencColorEncoder> _color_nvenc;
         std::map<stream_index_pair, std::shared_ptr<image_publisher>> _image_publishers;
         

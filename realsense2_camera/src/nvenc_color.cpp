@@ -12,11 +12,13 @@ constexpr int kPresetMedium = 3;
 constexpr int kMaxPerf = 1;
 constexpr int kDepth = 2;
 constexpr size_t kMaxAccessUnit = 2 << 20;
+constexpr int kAnonBlanked = 2;  // encode return: anonymizer failed, the frame was encoded blanked
+constexpr auto kAnonLogPeriod = std::chrono::seconds(30);
 }  // namespace
 
 NvencColorEncoder::NvencColorEncoder(rclcpp::Node& node, const std::string& topic, const std::string& frame_id,
-                                     int bitrate, int gop, rclcpp::Logger logger)
-    : _logger(logger), _frame_id(frame_id), _bitrate(bitrate), _gop(gop), _out(kMaxAccessUnit)
+                                     int bitrate, int gop, const NvencAnonymizer& anon, rclcpp::Logger logger)
+    : _logger(logger), _frame_id(frame_id), _bitrate(bitrate), _gop(gop), _anon(anon), _out(kMaxAccessUnit)
 {
     // Same QoS as ffmpeg_image_transport: reliable, keep last 2 GOPs
     _pub = node.create_publisher<foxglove_msgs::msg::CompressedVideo>(topic, rclcpp::QoS(std::max(10, 2 * gop)));
@@ -53,6 +55,17 @@ bool NvencColorEncoder::start(const rs2::video_frame& frame)
         RCLCPP_ERROR(_logger, "color_nvenc: encoder did not start (%s): no color H.264", err);
         return false;
     }
+    if (_anon.enabled)
+    {
+        // Fail closed: if the detector does not load, the encoder blanks every frame
+        if (nvjpg_enc_set_anonymizer(_enc, _anon.lib_path.c_str(), _anon.engine_path.c_str(), _anon.threshold,
+                                     _anon.detect_every, err, sizeof(err)) != 0)
+            RCLCPP_ERROR(_logger, "color_nvenc: anonymizer did not load (%s): every frame is encoded blanked", err);
+        else
+            RCLCPP_INFO(_logger, "color_nvenc: anonymizer %s, threshold %.2f, detect every %d frame(s)",
+                        _anon.engine_path.c_str(), _anon.threshold, _anon.detect_every);
+        _anon_log_time = std::chrono::steady_clock::now();
+    }
     // CameraInfo of the full-res frames, filled as the driver fills color/camera_info
     const rs2_intrinsics in = frame.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
     _info.header.frame_id = _frame_id;
@@ -81,6 +94,20 @@ void NvencColorEncoder::publish(size_t len, int64_t stamp_ns)
     _info.header.stamp = msg.timestamp;
     _pub->publish(std::move(msg));
     _info_pub->publish(_info);
+}
+
+// Every kAnonLogPeriod: detection time and blanked frames
+void NvencColorEncoder::log_anon_stats()
+{
+    const auto now = std::chrono::steady_clock::now();
+    if (now - _anon_log_time < kAnonLogPeriod) return;
+    _anon_log_time = now;
+    uint64_t frames, detections, failures;
+    double mean_ms, max_ms;
+    if (nvjpg_enc_anon_stats(_enc, &frames, &detections, &failures, &mean_ms, &max_ms) != 0) return;
+    RCLCPP_INFO(_logger, "color_nvenc: anonymizer %lu frames, %lu detections (%.1f ms mean, %.1f ms max), %lu blanked",
+                static_cast<unsigned long>(frames), static_cast<unsigned long>(detections), mean_ms, max_ms,
+                static_cast<unsigned long>(failures));
 }
 
 void NvencColorEncoder::run()
@@ -132,13 +159,16 @@ void NvencColorEncoder::run()
             }
             continue;
         }
-        if (rc != 0)
+        if (rc == kAnonBlanked)  // encoded (blanked): the access unit must still go out
+            RCLCPP_WARN_THROTTLE(_logger, _steady_clock, 5000, "color_nvenc: %s", nvjpg_enc_last_error(_enc));
+        else if (rc != 0)
         {
             RCLCPP_DEBUG(_logger, "color_nvenc: frame skipped (%d): %s", rc, nvjpg_enc_last_error(_enc));
             continue;
         }
         _errors = 0;
         if (len > 0) publish(len, out_stamp);
+        if (_anon.enabled) log_anon_stats();
     }
 }
 }  // namespace realsense2_camera
