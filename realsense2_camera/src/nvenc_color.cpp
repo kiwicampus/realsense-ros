@@ -7,6 +7,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstring>
 
@@ -21,6 +22,10 @@ constexpr int kDepth = 2;
 constexpr size_t kMaxAccessUnit = 2 << 20;
 constexpr int kAnonBlanked = 2;  // encode return: anonymizer failed, the frame was encoded blanked
 constexpr auto kAnonLogPeriod = std::chrono::seconds(30);
+// Growth of the published boxes around their centre: the encoder's own (faces 1.4 = ellipse covering the box,
+// plates 1.15) plus a margin for the low-res frame they are applied to, a frame or so later, as a rectangle
+constexpr float kFaceGrow = 1.6f, kPlateGrow = 1.3f;
+constexpr int kMaxBoxes = 100;
 }  // namespace
 
 NvencColorEncoder::NvencColorEncoder(rclcpp::Node& node, const std::string& topic, const std::string& frame_id,
@@ -32,6 +37,9 @@ NvencColorEncoder::NvencColorEncoder(rclcpp::Node& node, const std::string& topi
     // Same QoS as ffmpeg_image_transport: reliable, keep last 2 GOPs
     _pub = node.create_publisher<foxglove_msgs::msg::CompressedVideo>(topic, rclcpp::QoS(std::max(10, 2 * gop)));
     _info_pub = node.create_publisher<sensor_msgs::msg::CameraInfo>(topic + "/camera_info", 10);
+    if (_anon.enabled && !_anon.detections_topic.empty())
+        _det_pub = node.create_publisher<detection_msgs::msg::Detections>(_anon.detections_topic,
+                                                                          rclcpp::SensorDataQoS());
     _thread = std::thread(&NvencColorEncoder::run, this);
 }
 
@@ -105,6 +113,39 @@ void NvencColorEncoder::publish(size_t len, int64_t stamp_ns)
     _info_pub->publish(_info);
 }
 
+// The boxes the anonymizer applied to the frame just encoded (none when it was blanked: then nothing is published,
+// and the low-res color is not published either, see anonymizer_ok)
+void NvencColorEncoder::publish_detections(int64_t stamp_ns, int width, int height)
+{
+    float boxes[4 * kMaxBoxes], scores[kMaxBoxes];
+    int cls[kMaxBoxes];
+    const int n = nvjpg_enc_anon_boxes(_enc, boxes, cls, scores, kMaxBoxes);
+    if (n < 0) return;
+    detection_msgs::msg::Detections msg;
+    msg.header.stamp.sec = static_cast<int32_t>(stamp_ns / 1000000000);
+    msg.header.stamp.nanosec = static_cast<uint32_t>(stamp_ns % 1000000000);
+    msg.header.frame_id = _frame_id;
+    msg.camera = "stereo";
+    msg.width = width;
+    msg.height = height;
+    for (int i = 0; i < n; ++i)
+    {
+        const float* b = boxes + 4 * i;
+        const float s = cls[i] == 0 ? kFaceGrow : kPlateGrow;
+        const float cx = 0.5f * (b[0] + b[2]), cy = 0.5f * (b[1] + b[3]);
+        const float hw = 0.5f * s * (b[2] - b[0]), hh = 0.5f * s * (b[3] - b[1]);
+        detection_msgs::msg::Detection d;
+        d.box.x = std::max(0.f, cx - hw);
+        d.box.y = std::max(0.f, cy - hh);
+        d.box.w = std::min(1.f, cx + hw) - d.box.x;
+        d.box.h = std::min(1.f, cy + hh) - d.box.y;
+        d.prob = scores[i];
+        d.class_name = cls[i] == 0 ? "face" : "plate";
+        msg.detections.push_back(d);
+    }
+    _det_pub->publish(std::move(msg));
+}
+
 // Every kAnonLogPeriod: detection time and blanked frames
 void NvencColorEncoder::log_anon_stats()
 {
@@ -173,6 +214,19 @@ void NvencColorEncoder::run()
             }
             continue;
         }
+        if (_anon.enabled && (rc == 0 || rc == kAnonBlanked))
+        {
+            // The low-res color (image_raw) is not published while this is false (see anonymizer_ok)
+            const bool ok = rc == 0;
+            if (ok != _anon_ok.exchange(ok))
+            {
+                if (ok)
+                    RCLCPP_INFO(_logger, "color_nvenc: anonymizer working: color image_raw published");
+                else
+                    RCLCPP_ERROR(_logger, "color_nvenc: anonymizer failed (%s): color image_raw stops until it works",
+                                 nvjpg_enc_last_error(_enc));
+            }
+        }
         if (rc == kAnonBlanked)  // encoded (blanked): the access unit must still go out
             RCLCPP_WARN_THROTTLE(_logger, _steady_clock, 5000, "color_nvenc: %s", nvjpg_enc_last_error(_enc));
         else if (rc != 0)
@@ -182,6 +236,7 @@ void NvencColorEncoder::run()
         }
         _errors = 0;
         if (len > 0) publish(len, out_stamp);
+        if (_det_pub && rc == 0) publish_detections(stamp, v.get_width(), v.get_height());
         if (_anon.enabled) log_anon_stats();
     }
 }

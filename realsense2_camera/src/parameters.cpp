@@ -136,6 +136,9 @@ void BaseRealSenseNode::getParameters()
     param_name = std::string("color_anonymize_threshold");
     _color_anonymizer.threshold = static_cast<float>(_parameters->setParam<double>(param_name, 0.2));
     _parameters_names.push_back(param_name);
+    param_name = std::string("color_anonymize_detections_topic");
+    _color_anonymizer.detections_topic = _parameters->setParam<std::string>(param_name, "/anonymizer/stereo/detections");
+    _parameters_names.push_back(param_name);
     param_name = std::string("color_anonymize_every");
     _color_anonymizer.detect_every = std::max(1, _parameters->setParam<int>(param_name, 1));
     _parameters_names.push_back(param_name);
