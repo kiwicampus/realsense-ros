@@ -1321,6 +1321,12 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const rclcpp::Time& t,
     // We need to check for depth image this way since the it is sent as a color stream
     bool is_depth_stream = f.is<rs2::depth_frame>() && stream == COLOR;
     bool is_color_stream = !f.is<rs2::depth_frame>() && stream == COLOR;
+    // Kiwi added: with color_anonymize, the color (image_raw, _shm) is not published while the anonymizer of the
+    // H.264 is not working (not started yet, failed, or the encoder stopped): its absence shows the failure
+    if (is_color_stream && _color_nvenc && !_color_nvenc->anonymizer_ok())
+    {
+        return;
+    }
 
     auto& info_publisher = info_publishers.at(stream);
     auto& image_publisher = image_publishers.at(stream);

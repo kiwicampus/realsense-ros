@@ -110,6 +110,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(diagnostic_updater REQUIRED)
 find_package(shm_ros REQUIRED)
 find_package(foxglove_msgs REQUIRED)
+find_package(detection_msgs REQUIRED)
 find_package(nvjpg_decoder REQUIRED)
 
 find_package(realsense2 2.57.3)
@@ -228,6 +229,7 @@ set(dependencies
   diagnostic_updater
   shm_ros
   foxglove_msgs
+  detection_msgs
   nvjpg_decoder
 )
 
