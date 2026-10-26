@@ -49,7 +49,7 @@ class NvencColorEncoder
     // Hand over one color frame (no copy: the rs2 frame is kept). The worker encodes the frames in order from a
     // queue of kQueue frames; only when the queue is full is the oldest frame dropped
     void push(const rs2::video_frame& frame, int64_t stamp_ns);
-    static constexpr size_t kQueue = 3;
+    static constexpr size_t kQueue = 6;  // 3 dropped up to 15 of 900 frames per 30 s with nav2 on the CPU
 
    private:
     bool start(const rs2::video_frame& frame);
