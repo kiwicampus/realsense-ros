@@ -44,6 +44,7 @@ configurable_parameters = [{'name': 'camera_name',                  'default': '
                            {'name': 'align_depth.enable',           'default': 'true', 'description': "''"},                           
                            {'name': 'color_downscale',              'default': '1', 'description': 'N>1: color, align_depth and pointcloud at the color resolution / N; the full color goes only to the H.264 encoder'},
                            {'name': 'depth_process_fps',            'default': '0', 'description': '> 0: filters, align, pointcloud and low-res publish on every (depth fps / this)th frameset only; 0: every frameset'},
+                           {'name': 'color_nvenc_nice',             'default': '-10', 'description': 'CPU nice of the color_nvenc thread (it also launches the anonymizer GPU work): lower runs first under a loaded CPU'},
                            {'name': 'color_anonymize',              'default': 'false', 'description': 'pixelate faces / licence plates in the color H.264 (color_nvenc) before encoding; frames that cannot be anonymized are encoded blanked, and the color image_raw is not published while it fails'},
                            {'name': 'color_anonymize_lib',          'default': "''", 'description': 'local path of libanon.so (nvjpg_decoder/anon)'},
                            {'name': 'color_anonymize_engine',       'default': "''", 'description': 'local path of the TensorRT engine of the face / plate detector'},
