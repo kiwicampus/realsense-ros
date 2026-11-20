@@ -1,5 +1,16 @@
-// License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright 2023 RealSense, Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #pragma once
 
@@ -7,7 +18,7 @@
 #include <librealsense2/rsutil.h>
 #include "constants.h"
 #include <map>
-#include <rclcpp/rclcpp.hpp>
+#include "ros_node_base.h"
 #include <ros_utils.h>
 #include <sensor_params.h>
 #include <profile_manager.h>
@@ -75,7 +86,6 @@ namespace realsense2_camera
             ~RosSensor();
             void registerSensorParameters();
             bool getUpdatedProfiles(std::vector<rs2::stream_profile>& wanted_profiles);
-            void runFirstFrameInitialization();
             virtual bool start(const std::vector<rs2::stream_profile>& profiles);
             void stop();
             rmw_qos_profile_t getQOS(const stream_index_pair& sip) const;
@@ -84,7 +94,7 @@ namespace realsense2_camera
             template<class T> 
             bool is() const
             {
-                return (dynamic_cast<const T*> (&(*this)));
+                return rs2::sensor::is<T>();
             }
 
         private:
@@ -94,6 +104,7 @@ namespace realsense2_camera
             void set_sensor_auto_exposure_roi();
             void registerAutoExposureROIOptions();
             void UpdateSequenceIdCallback();
+            template<class T> 
             void set_sensor_parameter_to_ros(rs2_option option);
 
         private:
@@ -102,8 +113,6 @@ namespace realsense2_camera
             std::function<void(rs2::frame)> _frame_callback;
             SensorParams _params;
             std::function<void()> _update_sensor_func, _hardware_reset_func;
-            bool _is_first_frame;
-            std::vector<std::function<void()> > _first_frame_functions_stack;
             std::vector<std::shared_ptr<ProfilesManager> > _profile_managers;
             rs2::region_of_interest _auto_exposure_roi;
             std::vector<std::string> _parameters_names;

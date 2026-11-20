@@ -1,10 +1,38 @@
-// License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright 2023 RealSense, Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <ros_sensor.h>
+#include <assert.h>
 
 using namespace realsense2_camera;
 using namespace rs2;
+
+#define SAFE_SET_OPTION(opt, val)                                    \
+    if (this->supports(opt))                                          \
+    {                                                                \
+        try                                                          \
+        {                                                            \
+            this->set_option(opt, val);                               \
+        }                                                            \
+        catch(std::exception& e)                                     \
+        {                                                            \
+            ROS_WARN_STREAM("Failed to set option: " << rs2_option_to_string(opt) << " to val: " << val << " error: " << e.what());   \
+        }                                                            \
+    }                                                                \
+    
+    
+        
 
 void RosSensor::setupErrorCallback()
 {
@@ -46,7 +74,6 @@ RosSensor::RosSensor(rs2::sensor sensor,
 {
     _frame_callback = [this](rs2::frame frame)
         {
-            runFirstFrameInitialization();
             auto stream_type = frame.get_profile().stream_type();
             auto stream_index = frame.get_profile().stream_index();
             stream_index_pair sip{stream_type, stream_index};
@@ -67,13 +94,25 @@ RosSensor::RosSensor(rs2::sensor sensor,
 
 RosSensor::~RosSensor()
 {
-    clearParameters();
-    stop();
+    try
+    {
+        clearParameters();
+        stop();
+    }
+    catch(...){} // Not allowed to throw from Dtor
 }
 
 void RosSensor::setParameters(bool is_rosbag_file)
 {
     std::string module_name = create_graph_resource_name(rs2_to_ros(get_info(RS2_CAMERA_INFO_NAME)));
+
+    // From FW version 5.14.x.x, if HDR is enabled, updating UVC controls like exposure, gain , etc are restricted.
+    // So, during init of the node, forcefully disabling the HDR upfront and update it with new values.
+    if((!is_rosbag_file))
+    {
+        SAFE_SET_OPTION(RS2_OPTION_HDR_ENABLED, false);
+    }
+
     _params.registerDynamicOptions(*this, module_name);
 
     // for rosbag files, don't set hdr(sequence_id) / gain / exposure options
@@ -91,29 +130,75 @@ void RosSensor::UpdateSequenceIdCallback()
     if (!supports(RS2_OPTION_SEQUENCE_ID))
         return;
 
-    int original_seq_id = static_cast<int>(get_option(RS2_OPTION_SEQUENCE_ID));   // To Set back to default.
     std::string module_name = create_graph_resource_name(rs2_to_ros(get_info(RS2_CAMERA_INFO_NAME)));
-    
-    // Read initialization parameters and set to sensor:
-    std::vector<rs2_option> options{RS2_OPTION_EXPOSURE, RS2_OPTION_GAIN};
-    unsigned int seq_size = get_option(RS2_OPTION_SEQUENCE_SIZE);
-    for (unsigned int seq_id = 1; seq_id <= seq_size; seq_id++ )
+    std::string param_name = module_name + "." + create_graph_resource_name(rs2_option_to_string(RS2_OPTION_ENABLE_AUTO_EXPOSURE));
+
+    bool user_set_enable_ae_value = _params.getParameters()->getParam<bool>(param_name);
+    bool is_hdr_enabled = static_cast<bool>(get_option(RS2_OPTION_HDR_ENABLED));
+
+    if (is_hdr_enabled && user_set_enable_ae_value)
     {
-        set_option(RS2_OPTION_SEQUENCE_ID, seq_id);
-        for (rs2_option& option : options)
+        bool is_ae_enabled = static_cast<bool>(get_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE));
+
+        // If AE got auto-disabled, update the Enable_Auto_Exposure ROS paramerter as well accordingly.
+        if (!is_ae_enabled)
         {
-            std::stringstream param_name_str;
-            param_name_str << module_name << "." << create_graph_resource_name(rs2_option_to_string(option)) << "." << seq_id;
-            int option_value = get_option(option);
-            int user_set_option_value = _params.getParameters()->readAndDeleteParam(param_name_str.str(), option_value);
-            if (option_value != user_set_option_value)
+            ROS_WARN_STREAM("Auto Exposure functionality is not supported when HDR is enabled. " << 
+                                                "So, disabling the '" << param_name << "' param.");
+
+            try
             {
-                ROS_INFO_STREAM("Set " << rs2_option_to_string(option) << "." << seq_id << " to " << user_set_option_value);
-                set_option(option, user_set_option_value);
+                std::vector<std::function<void()> > funcs;
+                funcs.push_back([this](){set_sensor_parameter_to_ros<bool>(RS2_OPTION_ENABLE_AUTO_EXPOSURE);});
+                _params.getParameters()->pushUpdateFunctions(funcs);
+            }
+            catch(const std::exception& e)
+            {
+                ROS_WARN_STREAM("Failed to set parameter:" << param_name << " : " << e.what());
             }
         }
     }
-    set_option(RS2_OPTION_SEQUENCE_ID, original_seq_id);   // Set back to default.
+
+    // Deleter to revert back the RS2_OPTION_HDR_ENABLED value at the end.
+    auto deleter_to_revert_hdr = std::unique_ptr<bool, std::function<void(bool*)>>(&is_hdr_enabled,
+                                                [&](bool* enable_back_hdr) {
+                                                    if (enable_back_hdr && *enable_back_hdr)
+                                                    {
+                                                        SAFE_SET_OPTION(RS2_OPTION_HDR_ENABLED, true);
+                                                    }
+                                                });
+
+    if (is_hdr_enabled)
+    {
+        // From FW version 5.14.x.x, if HDR is enabled, updating UVC controls like exposure, gain , etc are restricted.
+        // So, disable it before updating. It will be reverted back by the deleter 'deleter_to_revert_hdr'.
+        SAFE_SET_OPTION(RS2_OPTION_HDR_ENABLED, false);
+
+        int original_seq_id = static_cast<int>(get_option(RS2_OPTION_SEQUENCE_ID));   // To Set back to default.
+
+        // Read initialization parameters and set to sensor:
+        std::vector<rs2_option> options{RS2_OPTION_EXPOSURE, RS2_OPTION_GAIN};
+        unsigned int seq_size = get_option(RS2_OPTION_SEQUENCE_SIZE);
+        for (unsigned int seq_id = 1; seq_id <= seq_size; seq_id++ )
+        {
+            SAFE_SET_OPTION(RS2_OPTION_SEQUENCE_ID, seq_id);
+
+            for (rs2_option& option : options)
+            {
+                std::stringstream param_name_str;
+                param_name_str << module_name << "." << create_graph_resource_name(rs2_option_to_string(option)) << "." << seq_id;
+                int option_value = get_option(option);
+                int user_set_option_value = _params.getParameters()->readAndDeleteParam(param_name_str.str(), option_value);
+                if (option_value != user_set_option_value)
+                {
+                    ROS_INFO_STREAM("Set " << rs2_option_to_string(option) << "." << seq_id << " to " << user_set_option_value);
+                    SAFE_SET_OPTION(option, user_set_option_value);
+                }
+            }
+        }
+
+        SAFE_SET_OPTION(RS2_OPTION_SEQUENCE_ID, original_seq_id);
+    }
 
     // Set callback to update ros parameters to gain and exposure matching the selected sequence_id:
     const std::string option_name(module_name + "." + create_graph_resource_name(rs2_option_to_string(RS2_OPTION_SEQUENCE_ID)));
@@ -123,10 +208,10 @@ void RosSensor::UpdateSequenceIdCallback()
         _params.getParameters()->setParam<int>(option_name, option_value, 
             [this](const rclcpp::Parameter& parameter)
             {
-                set_option(RS2_OPTION_SEQUENCE_ID, parameter.get_value<int>());
+                SAFE_SET_OPTION(RS2_OPTION_SEQUENCE_ID, parameter.get_value<int>());
                 std::vector<std::function<void()> > funcs;
-                funcs.push_back([this](){set_sensor_parameter_to_ros(RS2_OPTION_GAIN);});
-                funcs.push_back([this](){set_sensor_parameter_to_ros(RS2_OPTION_EXPOSURE);});
+                funcs.push_back([this](){set_sensor_parameter_to_ros<int>(RS2_OPTION_GAIN);});
+                funcs.push_back([this](){set_sensor_parameter_to_ros<int>(RS2_OPTION_EXPOSURE);});
                 _params.getParameters()->pushUpdateFunctions(funcs);
             });
     }
@@ -135,14 +220,14 @@ void RosSensor::UpdateSequenceIdCallback()
         ROS_WARN_STREAM("Setting alternative callback: Failed to set parameter:" << option_name << " : " << e.what());
         return;
     }
-
 }
 
+template<class T> 
 void RosSensor::set_sensor_parameter_to_ros(rs2_option option)
 {
     std::string module_name = create_graph_resource_name(rs2_to_ros(get_info(RS2_CAMERA_INFO_NAME)));
     const std::string option_name(module_name + "." + create_graph_resource_name(rs2_option_to_string(option)));
-    float value = get_option(option);
+    auto value = static_cast<T>(get_option(option));
     _params.getParameters()->setRosParamValue(option_name, &value);
 }
 
@@ -164,47 +249,6 @@ void RosSensor::registerSensorParameters()
     if (profile_manager->isTypeExist())
     {
         _profile_managers.push_back(profile_manager);
-    }
-    profile_manager = std::make_shared<PoseProfilesManager>(_params.getParameters(), _logger);
-    profile_manager->registerProfileParameters(all_profiles, _update_sensor_func);
-    if (profile_manager->isTypeExist())
-    {
-        _profile_managers.push_back(profile_manager);
-    }
-}
-
-void RosSensor::runFirstFrameInitialization()
-{
-    if (_is_first_frame)
-    {
-        ROS_DEBUG_STREAM("runFirstFrameInitialization: " << _first_frame_functions_stack.size());
-        _is_first_frame = false;
-        if (!_first_frame_functions_stack.empty())
-        {
-            std::thread t = std::thread([=]()
-            {
-                try
-                {
-                    while (!_first_frame_functions_stack.empty())
-                    {
-                        _first_frame_functions_stack.back()();
-                        _first_frame_functions_stack.pop_back();
-                    }
-                }
-                catch(const std::exception& e)
-                {
-                    std::cerr << "runFirstFrameInitialization(): " << e.what() << '\n';
-                    throw e;
-                }
-                catch(...)
-                {
-                    std::cerr << "runFirstFrameInitialization()!!!" << std::endl;
-                    throw;
-                }                
-
-            });
-            t.detach();
-        }
     }
 }
 
@@ -233,7 +277,7 @@ void RosSensor::stop()
 {
     if (get_active_streams().size() == 0)
         return;
-    ROS_INFO_STREAM("Stop Sensor: " << get_info(RS2_CAMERA_INFO_NAME));
+    ROS_INFO_STREAM("Stop Sensor: " << rs2_to_ros(get_info(RS2_CAMERA_INFO_NAME)));
     _frequency_diagnostics.clear();
 
     try
@@ -326,13 +370,13 @@ bool RosSensor::getUpdatedProfiles(std::vector<stream_profile>& wanted_profiles)
         profile_manager->addWantedProfiles(wanted_profiles);        
     }
 
-    ROS_DEBUG_STREAM(get_info(RS2_CAMERA_INFO_NAME) << ":" << "active_profiles.size() = " << active_profiles.size());
+    ROS_DEBUG_STREAM(rs2_to_ros(get_info(RS2_CAMERA_INFO_NAME)) << ":" << "active_profiles.size() = " << active_profiles.size());
     for (auto& profile : active_profiles)
     {
         ROS_DEBUG_STREAM("Sensor profile: " << ProfilesManager::profile_string(profile));
     }
 
-    ROS_DEBUG_STREAM(get_info(RS2_CAMERA_INFO_NAME) << ":" << "wanted_profiles");
+    ROS_DEBUG_STREAM(rs2_to_ros(get_info(RS2_CAMERA_INFO_NAME)) << ":" << "wanted_profiles");
     for (auto& profile : wanted_profiles)
     {
         ROS_DEBUG_STREAM("Sensor profile: " << ProfilesManager::profile_string(profile));
@@ -348,8 +392,19 @@ void RosSensor::set_sensor_auto_exposure_roi()
 {
     try
     {
-        int width = std::dynamic_pointer_cast<VideoProfilesManager>(_profile_managers[0])->getWidth();
-        int height = std::dynamic_pointer_cast<VideoProfilesManager>(_profile_managers[0])->getHeight();
+        rs2_stream stream_type = RS2_STREAM_ANY;
+        if (this->rs2::sensor::is<rs2::depth_sensor>())
+        {
+            stream_type = RS2_STREAM_DEPTH;
+        }
+        else if (this->rs2::sensor::is<rs2::color_sensor>())
+        {
+            stream_type = RS2_STREAM_COLOR;
+        }
+        assert(stream_type != RS2_STREAM_ANY);
+
+        int width = std::dynamic_pointer_cast<VideoProfilesManager>(_profile_managers[0])->getWidth(stream_type);
+        int height = std::dynamic_pointer_cast<VideoProfilesManager>(_profile_managers[0])->getHeight(stream_type);
 
         bool update_roi_range(false);
         if (_auto_exposure_roi.max_x > width)
@@ -380,8 +435,19 @@ void RosSensor::registerAutoExposureROIOptions()
 
     if (this->rs2::sensor::is<rs2::roi_sensor>())
     {
-        int width = std::dynamic_pointer_cast<VideoProfilesManager>(_profile_managers[0])->getWidth();
-        int height = std::dynamic_pointer_cast<VideoProfilesManager>(_profile_managers[0])->getHeight();
+        rs2_stream stream_type = RS2_STREAM_ANY;
+        if (this->rs2::sensor::is<rs2::depth_sensor>())
+        {
+            stream_type = RS2_STREAM_DEPTH;
+        }
+        else if (this->rs2::sensor::is<rs2::color_sensor>())
+        {
+            stream_type = RS2_STREAM_COLOR;
+        }
+        assert(stream_type != RS2_STREAM_ANY);
+        
+        int width = std::dynamic_pointer_cast<VideoProfilesManager>(_profile_managers[0])->getWidth(stream_type);
+        int height = std::dynamic_pointer_cast<VideoProfilesManager>(_profile_managers[0])->getHeight(stream_type);
 
         int max_x(width-1);
         int max_y(height-1);

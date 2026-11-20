@@ -1,23 +1,34 @@
-// License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright 2023 RealSense, Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #pragma once
 
-#include <rclcpp/rclcpp.hpp>
+#include "ros_node_base.h"
 
 namespace realsense2_camera
 {
     class ParametersBackend
     {
         public:
-            ParametersBackend(rclcpp::Node& node) : 
+            ParametersBackend(RosNodeBase& node) : 
                 _node(node),
                 _logger(node.get_logger())
-                {};
+                {}
             ~ParametersBackend();
 
 
-            #if defined( ROLLING ) 
+            #if defined( RCLCPP_HAS_OnSetParametersCallbackType )
                 using ros2_param_callback_type = rclcpp::node_interfaces::NodeParametersInterface::OnSetParametersCallbackType;
             #elif defined( IRON )
                 using ros2_param_callback_type = rclcpp::node_interfaces::NodeParametersInterface::OnSetParametersCallbackType;
@@ -29,7 +40,7 @@ namespace realsense2_camera
 
 
         private:
-            rclcpp::Node& _node;
+            RosNodeBase& _node;
             rclcpp::Logger _logger;
             std::shared_ptr<void> _ros_callback;
     };
