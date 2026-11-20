@@ -189,7 +189,7 @@ void BaseRealSenseNode::publishTopics()
     // Kiwi added virtual cam
     if (_color_virtual_cam >= 0 ){
         _virtualcam = new FakeWebcam("/dev/video" + std::to_string(_color_virtual_cam), 
-        _stream_intrinsics[COLOR].width, _stream_intrinsics[COLOR].height);
+        _camera_info[COLOR].width, _camera_info[COLOR].height);
     }
 
     // Initialize stereo color publish timer if custom rate is enabled
